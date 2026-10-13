@@ -131,7 +131,9 @@ Aplicadas no projeto com exatamente este SQL, nesta ordem; os nomes usam as vers
 
 **Os testes com cliente simulado NÃO provam que a RLS real funciona.** O simulador imita o formato das respostas da RLS para exercitar o código do aplicativo; a prova das políticas é dos dois arquivos SQL acima. Rode ambos depois de **toda** migração. Última execução dos dois: `TESTES_OK` (o banco ficou com 0 equipes, 0 atletas e 0 usuários depois de cada execução).
 
-O que **não** foi testado: login com conta real e envio do e-mail de redefinição (dependem do painel e de uma conta; ver "Ajustes manuais"), a latência e o limite de linhas reais do PostgREST (simulado em 1000), e a recuperação de senha de ponta a ponta.
+**Testado à mão com conta real (pelo dono do projeto, 2026-10-13):** login, criar equipe (a conta virou coach), cadastrar atleta e ver que continua depois de recarregar, e recuperação de senha de ponta a ponta no site publicado (e-mail recebido, link aberto no mesmo navegador, nova senha salva). Não há teste automatizado disso: depende de conta real e do e-mail.
+
+O que **não** foi testado: a latência e o limite de linhas reais do PostgREST (simulado em 1000), papéis `analyst` e `viewer` com contas reais (só com o simulador e com a RLS no SQL), e adicionar pessoas pelo formulário do app com uma segunda conta real.
 
 ## Ajustes manuais no painel do Supabase (não dá para versionar aqui)
 
