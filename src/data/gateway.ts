@@ -43,7 +43,13 @@ export interface SnapshotInfo {
  * existe só para restaurar/limpar a demonstração.
  */
 export interface DataGateway {
-  /** false quando o armazenamento do navegador não está disponível (dados só em memória). */
+  /**
+   * `local`: dados neste navegador (localStorage), com cópia de segurança, desfazer e substituição do workspace.
+   * `remote`: dados da equipe no Supabase. Substituir o workspace inteiro, cópia automática e desfazer NÃO existem
+   * aqui (nenhum dado é apagado ou trocado em bloco pelo aplicativo); a interface esconde esses recursos.
+   */
+  readonly kind: 'local' | 'remote';
+  /** false quando o armazenamento do navegador não está disponível (dados só em memória). Remoto: sempre true. */
   readonly persistent: boolean;
   /**
    * Lê o workspace. NUNCA cria dados sozinho: se não existe workspace, falha com WorkspaceMissingError
@@ -118,6 +124,46 @@ export class WorkspaceMissingError extends Error {
         : 'Ainda não há dados neste navegador.',
     );
     this.name = 'WorkspaceMissingError';
+  }
+}
+
+/** O banco recusou a operação por falta de permissão (RLS): o papel da pessoa não permite. */
+export class PermissionDeniedError extends Error {
+  constructor(detail = 'Seu papel na equipe não permite esta ação.') {
+    super(detail);
+    this.name = 'PermissionDeniedError';
+  }
+}
+
+/** A sessão de login expirou ou foi encerrada: é preciso entrar de novo. Nada foi gravado. */
+export class SessionExpiredError extends Error {
+  constructor() {
+    super('Sua sessão expirou. Entre novamente para continuar. Nada foi gravado.');
+    this.name = 'SessionExpiredError';
+  }
+}
+
+/** Sem conexão com o servidor (rede, serviço fora do ar). Nada foi gravado. */
+export class RemoteUnavailableError extends Error {
+  constructor() {
+    super('Sem conexão com o servidor. Verifique a internet e tente de novo. Nada foi gravado.');
+    this.name = 'RemoteUnavailableError';
+  }
+}
+
+/** O servidor devolveu algo que o aplicativo não entende (dado fora do formato esperado ou falha inesperada). */
+export class RemoteDataError extends Error {
+  constructor(detail: string) {
+    super(`Os dados recebidos do servidor não puderam ser usados (${detail}). Nada foi alterado.`);
+    this.name = 'RemoteDataError';
+  }
+}
+
+/** A operação não existe com o backend remoto (por exemplo, substituir o workspace inteiro). */
+export class RemoteOperationUnavailableError extends Error {
+  constructor(operation: string) {
+    super(`${operation} não está disponível com os dados na nuvem. Nenhum dado foi alterado.`);
+    this.name = 'RemoteOperationUnavailableError';
   }
 }
 

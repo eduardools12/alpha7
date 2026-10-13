@@ -44,7 +44,8 @@ const PERSISTED_TEXT: Record<Exclude<Persisted, null>, string> = {
 
 /** Dados e armazenamento: onde ficam, o que há, integridade, desfazer substituição, demonstração e limpeza. */
 export function DataPanel() {
-  const { data, persistent, snapshot, actions } = useWorkspace();
+  const { data, persistent, snapshot, actions, backend } = useWorkspace();
+  const remote = backend === 'remote';
   const persisted = usePersisted();
   const [pending, setPending] = useState<Pending>(null);
   const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
@@ -113,16 +114,18 @@ export function DataPanel() {
   return (
     <Card title="Dados e armazenamento" id="dados">
       <p className={styles.muted}>
-        {persistent
-          ? 'Os dados ficam salvos só neste navegador (armazenamento local). Eles não são enviados a nenhum servidor e não há sincronização com a nuvem: outro navegador ou aparelho não vê estes dados. Limpar os dados do navegador apaga tudo. O backup é a sua proteção.'
-          : 'O armazenamento do navegador está indisponível: os dados valem só até recarregar a página.'}
+        {remote
+          ? 'Os dados da equipe ficam no servidor (Supabase), e não neste navegador. Todos os integrantes enxergam os mesmos dados, conforme o papel de cada um (as regras são aplicadas pelo banco). Não há cópia de segurança automática nem desfazer: use "Exportar backup" para guardar uma cópia do que está na nuvem.'
+          : persistent
+            ? 'Os dados ficam salvos só neste navegador (armazenamento local). Eles não são enviados a nenhum servidor e não há sincronização com a nuvem: outro navegador ou aparelho não vê estes dados. Limpar os dados do navegador apaga tudo. O backup é a sua proteção.'
+            : 'O armazenamento do navegador está indisponível: os dados valem só até recarregar a página.'}
       </p>
       <p>
         Atualmente: {summary.players} atletas ({demoPlayers} de demonstração), {summary.evaluations} avaliações, {summary.lineups}{' '}
         escalações, {summary.trainings} treinos e {summary.trainingEvents} registros de treino ({describeOrigin(summary)}).
       </p>
-      {persisted && persistent && <p className={styles.muted}>{PERSISTED_TEXT[persisted]}</p>}
-      {usage && persistent && (
+      {persisted && persistent && !remote && <p className={styles.muted}>{PERSISTED_TEXT[persisted]}</p>}
+      {usage && persistent && !remote && (
         <>
           <p className={styles.muted}>
             Espaço usado no navegador: {formatKb(usage.usedChars)} (dados {formatKb(usage.workspaceChars)}, cópia de segurança{' '}
@@ -195,7 +198,12 @@ export function DataPanel() {
 
       <div className={styles.block}>
         <h3 className={styles.heading}>Demonstração e limpeza</h3>
-        {pending === 'demo' ? (
+        {remote ? (
+          <Notice tone="info" title="Indisponível com os dados na nuvem">
+            Restaurar a demonstração e apagar todos os dados trocam o workspace inteiro. No servidor isso apagaria o histórico de todos os
+            integrantes sem volta, então esses recursos existem só com os dados deste navegador.
+          </Notice>
+        ) : pending === 'demo' ? (
           <ReplaceConfirm
             title="Substituir tudo pela demonstração?"
             impact={[

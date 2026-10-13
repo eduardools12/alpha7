@@ -1,3 +1,4 @@
+import { Can } from '@/auth/AccessContext';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
@@ -83,12 +84,12 @@ export function PlayerProfilePage() {
         back={{ to: PATHS.roster, label: 'Elenco' }}
         actions={
           <>
-            <ButtonLink to={PATHS.editPlayer(player.id)} icon="edit">
+            <Can to="players:write"><ButtonLink to={PATHS.editPlayer(player.id)} icon="edit">
               Editar perfil
-            </ButtonLink>
-            <ButtonLink to={PATHS.evaluatePlayer(player.id)} variant="primary" icon="plus">
+            </ButtonLink></Can>
+            <Can to="evaluations:add"><ButtonLink to={PATHS.evaluatePlayer(player.id)} variant="primary" icon="plus">
               Registrar avaliação
-            </ButtonLink>
+            </ButtonLink></Can>
           </>
         }
       />
@@ -129,9 +130,9 @@ export function PlayerProfilePage() {
               icon="chart"
               title="Este atleta ainda não foi avaliado"
               action={
-                <ButtonLink to={PATHS.evaluatePlayer(player.id)} variant="primary" icon="plus">
+                <Can to="evaluations:add"><ButtonLink to={PATHS.evaluatePlayer(player.id)} variant="primary" icon="plus">
                   Registrar a primeira avaliação
-                </ButtonLink>
+                </ButtonLink></Can>
               }
             >
               Sem notas, o Overall fica indisponível. Ele nunca aparece como zero.

@@ -1,5 +1,5 @@
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import { WorkspaceProvider } from '@/data/WorkspaceProvider';
+import { RequireCapability } from '@/auth/AccessContext';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { LineupEditorPage } from '@/features/lineup/LineupEditorPage';
 import { LineupListPage } from '@/features/lineup/LineupListPage';
@@ -15,6 +15,7 @@ import { TrainingRecordPage } from '@/features/trainings/TrainingRecordPage';
 import { TrainingSummaryPage } from '@/features/trainings/TrainingSummaryPage';
 import { TrainingsListPage } from '@/features/trainings/TrainingsListPage';
 import { AppLayout } from './AppLayout';
+import { BackendRoot } from './BackendRoot';
 import { RouteEffects } from './RouteEffects';
 
 /** Rotas separadas do roteador para que os testes possam usar MemoryRouter. */
@@ -26,18 +27,18 @@ export function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
           <Route path="elenco" element={<RosterPage />} />
-          <Route path="elenco/novo" element={<PlayerFormPage />} />
+          <Route path="elenco/novo" element={<RequireCapability capability="players:write"><PlayerFormPage /></RequireCapability>} />
           <Route path="elenco/:playerId" element={<PlayerProfilePage />} />
-          <Route path="elenco/:playerId/editar" element={<PlayerFormPage />} />
-          <Route path="elenco/:playerId/avaliar" element={<EvaluationPage />} />
+          <Route path="elenco/:playerId/editar" element={<RequireCapability capability="players:write"><PlayerFormPage /></RequireCapability>} />
+          <Route path="elenco/:playerId/avaliar" element={<RequireCapability capability="evaluations:add"><EvaluationPage /></RequireCapability>} />
           <Route path="escalacoes" element={<LineupListPage />} />
-          <Route path="escalacoes/nova" element={<LineupEditorPage />} />
+          <Route path="escalacoes/nova" element={<RequireCapability capability="lineups:write"><LineupEditorPage /></RequireCapability>} />
           <Route path="escalacoes/:lineupId" element={<LineupEditorPage />} />
           <Route path="treinos" element={<TrainingsListPage />} />
-          <Route path="treinos/novo" element={<TrainingFormPage />} />
+          <Route path="treinos/novo" element={<RequireCapability capability="trainings:write"><TrainingFormPage /></RequireCapability>} />
           <Route path="treinos/:trainingId" element={<TrainingSummaryPage />} />
-          <Route path="treinos/:trainingId/editar" element={<TrainingFormPage />} />
-          <Route path="treinos/:trainingId/registrar" element={<TrainingRecordPage />} />
+          <Route path="treinos/:trainingId/editar" element={<RequireCapability capability="trainings:write"><TrainingFormPage /></RequireCapability>} />
+          <Route path="treinos/:trainingId/registrar" element={<RequireCapability capability="events:record"><TrainingRecordPage /></RequireCapability>} />
           <Route path="partidas" element={<MatchesPage />} />
           <Route path="estatisticas" element={<StatsPage />} />
           <Route path="configuracoes" element={<SettingsPage />} />
@@ -50,10 +51,10 @@ export function AppRoutes() {
 
 export function App() {
   return (
-    <WorkspaceProvider>
-      <BrowserRouter>
+    <BrowserRouter>
+      <BackendRoot>
         <AppRoutes />
-      </BrowserRouter>
-    </WorkspaceProvider>
+      </BackendRoot>
+    </BrowserRouter>
   );
 }

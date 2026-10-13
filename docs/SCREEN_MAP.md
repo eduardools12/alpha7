@@ -31,7 +31,7 @@ As referências são especificação, não assets. Diferenças deliberadas: `DES
   /treinos/:id          Resumo pós-treino ── /treinos/:id/editar
                                             └ /treinos/:id/registrar (registro rápido)
 /partidas  /estatisticas   Em desenvolvimento
-/configuracoes          Backup (#backup), dados e armazenamento (#dados), pesos do Overall, identidade
+/configuracoes          Conta e equipe (#conta, só com Supabase), backup (#backup), dados e armazenamento (#dados), pesos do Overall, identidade
 ```
 
 Menu lateral (≥ 960px) e barra inferior (< 960px; "Mais" abre Partidas, Estatísticas e Configurações).
@@ -108,6 +108,8 @@ Objetivo: conduzir o placar de uma partida. Previstos: placar do set com saque e
 3. Pesos do Overall.
 4. Identidade da equipe (logo e uniformes oficiais).
 
-Antes de qualquer rota, quando não há workspace utilizável, o layout mostra no lugar da página: **"Como você quer começar?"** (primeira utilização: workspace vazio, dados de demonstração ou restaurar de um backup; nada é gravado antes da escolha) ou **"Recuperar os dados da equipe"** (workspace ausente com rastros de uso anterior, ou dado ilegível: importar backup, restaurar a cópia automática, baixar dados brutos, tentar novamente e começar um workspace novo só após confirmação). Ver DATA_SAFETY.md, seção 7.
+Com o backend **Supabase** (`VITE_DATA_BACKEND=supabase`), antes de qualquer rota o app mostra, nesta ordem e fora da moldura com menu: **Entrar** (e-mail e senha, "Esqueci minha senha", aviso de sessão expirada; sem cadastro), **Escolher nova senha** (ao abrir o link de redefinição), **Criar sua equipe** (pessoa sem equipe), **Escolha a equipe** (mais de uma) e, com tudo resolvido, o app. Configuração inválida mostra **Configuração do Alpha7** com o que ajustar. Em Configurações aparece **Conta e equipe**: e-mail, equipe, papel, o que o papel permite, trocar de equipe, sair e, só para coach, **Adicionar pessoa à equipe**. A barra lateral mostra equipe, e-mail e papel, com "Sair" (e "Trocar de equipe" quando há mais de uma). Papel `viewer` vê a faixa "Acesso somente leitura"; botões de escrita somem ou ficam desativados e as telas de escrita abertas por endereço explicam que o papel não permite. Com dados na nuvem, as telas de início/recuperação do armazenamento local e os recursos de substituir workspace (demonstração, apagar tudo, importar backup, desfazer) não existem.
+
+Antes de qualquer rota, quando não há workspace local utilizável, o layout mostra no lugar da página: **"Como você quer começar?"** (primeira utilização: workspace vazio, dados de demonstração ou restaurar de um backup; nada é gravado antes da escolha) ou **"Recuperar os dados da equipe"** (workspace ausente com rastros de uso anterior, ou dado ilegível: importar backup, restaurar a cópia automática, baixar dados brutos, tentar novamente e começar um workspace novo só após confirmação). Ver DATA_SAFETY.md, seção 7.
 
 Em todas as telas: faixa **"Faça um backup dos dados da equipe"** (com link para `#backup`) quando há dados reais sem backup recente; a faixa de demonstração também avisa quando o armazenamento do navegador está indisponível; se os dados salvos estiverem ilegíveis, a tela de recuperação explica que nada foi apagado e oferece as saídas acima. A faixa de demonstração vira "Demonstração misturada com dados da equipe" quando há registros fictícios e reais juntos, e uma faixa avisa quando a validação estrita achou inconsistências nos dados abertos.

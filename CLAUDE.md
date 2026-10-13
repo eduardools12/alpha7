@@ -1,6 +1,6 @@
 # Alpha7 Volleyball Performance
 
-Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.3.1** (v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos; v0.3 = proteção dos dados: backup, importação segura, cópia automática; 0.3.1 = inicialização e recuperação seguras: nunca cria demonstração sozinha). A versão vive em `src/version.ts` e deve ser igual à do `package.json` (há teste).
+Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.4.0** (v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos; v0.3 = proteção dos dados: backup, importação segura, cópia automática; 0.3.1 = inicialização e recuperação seguras: nunca cria demonstração sozinha; 0.4.0 = Supabase fase 2: login, equipe, papéis e `SupabaseGateway`, com o backend local ainda como padrão). A versão vive em `src/version.ts` e deve ser igual à do `package.json` (há teste).
 
 ## Estado atual (não declare como pronto o que está só planejado)
 
@@ -17,7 +17,8 @@ Aplicação web de gestão esportiva e análise de desempenho para uma equipe am
 | Gerador de artes (pôster da escalação) | **Não implementado**: botão desativado |
 | Proteção dos dados (v0.3): exportar/importar backup JSON validado, cópia automática com desfazer, confirmação reforçada, verificar integridade, lembrete, recuperação de dado ilegível | Implementado. Auditoria e riscos: `docs/DATA_SAFETY.md` |
 | Supabase fase 1: projeto `alpha7`, esquema, RLS por equipe e papéis, testes de segurança no banco | Implementado no banco (`supabase/`). **O aplicativo ainda não usa**: sem login, sem `SupabaseGateway`; nenhum dado real foi enviado |
-| Login, `SupabaseGateway`, importação para a nuvem, upload de fotos | **Não implementados**: persistência em `localStorage` (um navegador, sem nuvem; o backup em arquivo é a proteção) |
+| Supabase fase 2 (0.4.0): login por e-mail e senha, recuperação de senha, escolha/criação de equipe, papéis (coach/analyst/viewer) na interface, `SupabaseGateway` operação por operação | Implementado, **desligado por padrão** (`VITE_DATA_BACKEND=supabase` liga). Testado com cliente **simulado** e, nas políticas, no banco real. Login com conta real e e-mail de redefinição **não foram testados** (dependem do painel). Ver `supabase/README.md` |
+| Importação dos dados locais para a nuvem, restaurar/substituir workspace remoto, tempo real, upload de fotos | **Não implementados**. O padrão continua `localStorage` (um navegador; o backup em arquivo é a proteção). Nenhum dado real foi para a nuvem |
 
 ## Stack
 
@@ -30,7 +31,7 @@ npm install
 npm run dev          # http://localhost:5173
 npm run typecheck    # tsc --noEmit
 npm test             # Vitest (unidade + telas em jsdom)
-npm run test:e2e     # Playwright em Chrome real (responsividade e fluxos); sobe o servidor sozinho
+npm run test:e2e     # Playwright em Chrome real (responsividade e fluxos); sobe os servidores sozinho (5174 local, 5175 com Supabase apontando para endereço inexistente)
 npm run build        # typecheck + build de produção
 ```
 
@@ -46,6 +47,10 @@ src/
                 (trainingStats). Tudo testado.
   data/         Persistência e estado: contrato DataGateway, LocalStorageGateway, dados de
                 demonstração, WorkspaceProvider (store em contexto), selectors.
+  data/supabase Backend remoto: config (VITE_*), cliente único tipado, tipos gerados do banco,
+                conversores linha ↔ domínio e SupabaseGateway.
+  auth/         Login, sessão, equipe, papéis: AuthProvider, TeamGate, permissions (matriz de papéis),
+                AccessContext (Can, RequireCapability), telas de login e nova senha.
   components/   ui/ (botão, campo, aviso...), brand/ (logo, carta, camisa, Overall), charts/
   features/     dashboard, roster, lineup, trainings, settings, placeholders (uma pasta por módulo)
   app/          App/rotas, layout, menus, efeitos de rota
@@ -96,6 +101,11 @@ Regra de dependência: `domain` não importa nada de fora de `domain`. `data` im
   - Importação nunca mescla nem aplica JSON bruto: `parseBackup` reconstrói cada objeto só com campos conhecidos e rejeita o arquivo inteiro se algo falhar. O checksum detecta corrupção, não adulteração.
   - Mudou o formato dos dados? Aditivo e opcional não exige nova versão; qualquer outra mudança exige nova versão de esquema/formato **e** migração em `MIGRATIONS` com teste usando arquivo v1 fixo. Atualize `src/version.ts` junto com `package.json`.
   - Toda nova coleção persistida entra em `Workspace`, no backup (`workspaceBody`), em `validateWorkspace`, em `summarizeWorkspace` e nos testes de ida e volta.
+- **Backend de dados (0.4.0):** a escolha é EXPLÍCITA por `VITE_DATA_BACKEND` (`local` padrão | `supabase`); valor inválido é erro na tela, nunca troca silenciosa. Dados locais e remotos **nunca se misturam**: não copie o workspace local para a nuvem fora de uma importação própria (ainda não existe). Remoto vazio abre vazio, nunca demonstração.
+- **A RLS decide, a interface só reflete.** `src/auth/permissions.ts` espelha as políticas e `permissions.test.ts` falha se divergirem do SQL. Toda ação de escrita checa o papel em `WorkspaceProvider` (mensagem clara) e o banco recusa de qualquer forma. Nova tabela/política? Atualize a matriz, o simulador (`src/test/fakeSupabase.ts`), `database.types.ts` e rode `supabase/tests/*.test.sql`.
+- **Mock não é prova de RLS.** `fakeSupabase.ts` simula o app falando com o banco; a prova das políticas são `supabase/tests/rls.test.sql` e `gateway_shapes.test.sql`, executados no banco real (terminam em exceção `TESTES_OK`, nada persiste). Diga sempre qual dos dois você rodou.
+- Frontend só com URL e chave **publishable**; `service_role`/`sb_secret_` nunca (o app recusa). `.env.local` não vai ao Git. Não crie contas nem equipes de teste no projeto real: use o simulador ou transações que terminam em exceção.
+- O `SupabaseGateway` não grava o workspace inteiro e não tem substituir/snapshot/desfazer: a interface esconde esses recursos quando `backend === 'remote'` (veja `useWorkspace().backend`).
 - Texto digitado é renderizado pelo React (escapado); nunca use `dangerouslySetInnerHTML`.
 - Não adicione dependências sem justificar (o que resolve, por que não dá para fazer sem).
 
@@ -114,5 +124,6 @@ Logo e uniformes oficiais: use os arquivos originais. `public/brand/original/` g
 - Responsivo de 360px a 1920px, sem rolagem horizontal (o `e2e/responsive.spec.ts` verifica; inclua a nova rota em `ROUTES`).
 - Tipos, testes e build passam; documentação (`docs/`) atualizada sem declarar como implementado o que é plano.
 - Troca de persistência: implemente `DataGateway` (`src/data/gateway.ts`); telas e domínio não mudam.
+- Testes remotos: `renderRemote` (`src/test/renderRemote.tsx`) monta o app inteiro com `BackendRoot` e a base simulada; `remoteFixtures.ts` tem pessoas, equipes e `seedWorkspace`. A base simulada tem UMA sessão: crie cada gateway logo antes de usar.
 - Testes: `renderApp` grava o workspace inicial antes de abrir o app (`seed: false` simula o navegador sem dados); nos testes do gateway use `gatewayWith`. Nos testes de navegador, `e2e/fixtures.ts` passa pela escolha de primeira utilização; só `e2e/startup.spec.ts` usa `@playwright/test` direto.
 - Ação que apaga ou substitui dados: nunca silenciosa; siga a regra de proteção de dados acima e teste cancelar, falha no meio e desfazer.

@@ -197,6 +197,7 @@ function parseWorkspace(raw: string): Workspace {
  * Nunca cria dados por conta própria: sem workspace, `load` falha e a interface pergunta o que fazer.
  */
 export class LocalStorageGateway implements DataGateway {
+  readonly kind = 'local' as const;
   readonly persistent: boolean;
   private readonly storage: StorageLike | null;
   private memory: Workspace | null = null;

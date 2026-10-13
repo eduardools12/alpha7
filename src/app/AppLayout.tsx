@@ -3,6 +3,7 @@ import { Link, Outlet } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/EmptyState';
 import { Notice } from '@/components/ui/Notice';
+import { useAccess } from '@/auth/AccessContext';
 import { hasRealData } from '@/data/backup';
 import { useBackupStatus } from '@/data/useBackupStatus';
 import { useWorkspace } from '@/data/WorkspaceProvider';
@@ -33,7 +34,8 @@ function BackupReminder() {
 }
 
 function DemoBanner() {
-  const { status, data, persistent, integrityProblems } = useWorkspace();
+  const { status, data, persistent, integrityProblems, backend } = useWorkspace();
+  const access = useAccess();
   const ready = status === 'ready';
   const hasDemo =
     ready &&
@@ -60,8 +62,13 @@ function DemoBanner() {
           <Link to={`${PATHS.settings}#dados`}>Verificar integridade</Link>
         </Notice>
       )}
-      {ready && <BackupReminder />}
-      {!persistent && (
+      {ready && access.readOnly && (
+        <Notice tone="info" title="Acesso somente leitura">
+          Seu papel permite consultar os dados da equipe, mas não alterá-los. Os botões de edição ficam desativados ou ocultos.
+        </Notice>
+      )}
+      {ready && backend === 'local' && <BackupReminder />}
+      {!persistent && backend === 'local' && (
         <Notice tone="warning" title="Armazenamento do navegador indisponível">
           As alterações valem só até recarregar a página. Exporte um backup antes de fechar.
         </Notice>

@@ -1,3 +1,4 @@
+import { Can } from '@/auth/AccessContext';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
@@ -21,7 +22,7 @@ import styles from './TrainingSummaryPage.module.css';
 
 export function TrainingSummaryPage() {
   const { trainingId } = useParams();
-  const { data, actions } = useWorkspace();
+  const { data, actions, backend } = useWorkspace();
   const navigate = useNavigate();
   const location = useLocation();
   const flash = (location.state as { flash?: string } | null)?.flash;
@@ -99,21 +100,23 @@ export function TrainingSummaryPage() {
         actions={
           <>
             {open && (
-              <ButtonLink to={PATHS.recordTraining(training.id)} variant="primary" icon="plus">
+              <Can to="events:record"><ButtonLink to={PATHS.recordTraining(training.id)} variant="primary" icon="plus">
                 Registrar
-              </ButtonLink>
+              </ButtonLink></Can>
             )}
-            <Button
-              variant={open ? 'secondary' : 'primary'}
-              icon={open ? 'check' : 'rotate'}
-              disabled={busy}
-              onClick={() => void run(() => actions.setTrainingStatus(training.id, open ? 'concluido' : 'aberto'))}
-            >
-              {open ? 'Concluir treino' : 'Reabrir treino'}
-            </Button>
-            <ButtonLink to={PATHS.editTraining(training.id)} icon="edit">
+            <Can to="trainings:write">
+              <Button
+                variant={open ? 'secondary' : 'primary'}
+                icon={open ? 'check' : 'rotate'}
+                disabled={busy}
+                onClick={() => void run(() => actions.setTrainingStatus(training.id, open ? 'concluido' : 'aberto'))}
+              >
+                {open ? 'Concluir treino' : 'Reabrir treino'}
+              </Button>
+            </Can>
+            <Can to="trainings:write"><ButtonLink to={PATHS.editTraining(training.id)} icon="edit">
               Editar
-            </ButtonLink>
+            </ButtonLink></Can>
           </>
         }
       />
@@ -301,6 +304,7 @@ export function TrainingSummaryPage() {
         {training.notes ? <p className={styles.notes}>{training.notes}</p> : <p className={styles.muted}>Sem observações. Use “Editar” para adicionar.</p>}
       </Card>
 
+      <Can to="trainings:delete">
       <Card title="Excluir treino">
         {confirmDelete ? (
           <>
@@ -335,8 +339,13 @@ export function TrainingSummaryPage() {
           </div>
         )}
       </Card>
+      </Can>
 
-      <p className={styles.footnote}>Estes dados ficam salvos só neste navegador (armazenamento local), sem sincronização com a nuvem.</p>
+      <p className={styles.footnote}>
+        {backend === 'remote'
+          ? 'Estes dados ficam salvos no servidor da equipe (nuvem).'
+          : 'Estes dados ficam salvos só neste navegador (armazenamento local), sem sincronização com a nuvem.'}
+      </p>
     </>
   );
 }

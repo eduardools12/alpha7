@@ -32,6 +32,23 @@ Integridade de treinos (aplicada no domínio **e** de novo no gateway, para que 
 - **Excluir o treino** apaga, de forma atômica, o treino, seus exercícios e todos os seus eventos (válidos e desfeitos), e só eles. A tela informa as contagens antes de confirmar.
 - Treino concluído não aceita novos registros até ser reaberto.
 
+### Backend remoto (0.4.0): domínio ↔ tabelas
+
+`SupabaseGateway` implementa o mesmo contrato, operação por operação, contra as tabelas reais de `supabase/migrations/` (fonte da verdade; tipos em `src/data/supabase/database.types.ts`). Conversões em `src/data/supabase/mappers.ts`:
+
+| Domínio | Tabela(s) | Observações |
+|---|---|---|
+| `Player` | `players` | `jerseyNumber` → `jersey_number`; camisa única por equipe |
+| `Evaluation` | `evaluations` | `attributes` → colunas `sac, rec, lev, ata, blq, def, vel, imp, lei`; só acrescenta |
+| `Settings.weights` | `overall_weights` | uma linha por posição; posição sem linha = pesos padrão; linha inválida = erro |
+| `Lineup` | `lineups` + `lineup_starters` (slot 0 a 5) + `lineup_bench` (`sort_order`) | `scheduledAt` é texto; gravação em etapas (apaga e reinsere partes) |
+| `Training` | `trainings` + `training_participants` | `date` → `held_on`; `participantIds` volta ordenado por id |
+| `TrainingExercise` | `training_exercises` | `order` → `sort_order` |
+| `TrainingEvent` | `training_events` | idempotente por `(team_id, attempt_key)`; anulação por `voided_at`/`voided_by` |
+| `Workspace.activity` | (nenhuma) | sempre `null` no remoto |
+
+Todas as consultas levam `team_id`; ids de texto preservados. Com `kind === 'remote'`, `replaceWorkspace`, `snapshotInfo`, `restoreSnapshot`, `exportRaw`, `recoveryCopies`, `subscribe` e `usage` não têm equivalente: devolvem vazio ou `RemoteOperationUnavailableError`, e a interface esconde esses recursos. Erros tipados novos em `gateway.ts`: `PermissionDeniedError`, `SessionExpiredError`, `RemoteUnavailableError`, `RemoteDataError`, `RemoteOperationUnavailableError`.
+
 ### Chaves do navegador e proteção dos dados (v0.3)
 
 | Chave `localStorage` | Conteúdo | Observação |
@@ -42,7 +59,7 @@ Integridade de treinos (aplicada no domínio **e** de novo no gateway, para que 
 | `alpha7.workspace.v1.seen` | Data ISO da primeira vez em que este navegador teve um workspace | Marca de uso anterior: se a chave principal sumir e a marca ficar, o app abre a **recuperação** em vez da escolha de primeira utilização. Gravada junto com a primeira gravação e ao abrir dados existentes |
 | `alpha7.lastBackup.v1` | `{ at, fingerprint, filename }` do último backup exportado | Fica **fora** do workspace e **fora** do backup: é metadado da máquina, não dado da equipe |
 
-`DataGateway` ganhou `replaceWorkspace(workspace, reason)`, `snapshotInfo()`, `restoreSnapshot()`, `exportRaw()`, `recoveryCopies()`, `subscribe()` e `usage()`. **`load()` nunca cria dados**: sem workspace, falha com `WorkspaceMissingError` (`first-use` ou `lost`, conforme haja rastros de uso anterior) e dado ilegível falha com `StorageCorruptedError`; a interface decide o que fazer (ver DATA_SAFETY.md, seção 7). Gravar sem workspace é recusado (`IntegrityError`), nunca recria demonstração. Regras: toda substituição do workspace inteiro guarda antes a cópia de segurança e **aborta sem alterar nada** se não conseguir guardá-la; a troca é uma única chamada `setItem` (tudo ou nada); `deleteTraining` também guarda a cópia. O formato do arquivo de backup e as regras de importação estão em [DATA_SAFETY.md](DATA_SAFETY.md).
+`DataGateway` tem `kind` (`local` | `remote`) e ganhou `replaceWorkspace(workspace, reason)`, `snapshotInfo()`, `restoreSnapshot()`, `exportRaw()`, `recoveryCopies()`, `subscribe()` e `usage()`. **`load()` nunca cria dados**: sem workspace, falha com `WorkspaceMissingError` (`first-use` ou `lost`, conforme haja rastros de uso anterior) e dado ilegível falha com `StorageCorruptedError`; a interface decide o que fazer (ver DATA_SAFETY.md, seção 7). Gravar sem workspace é recusado (`IntegrityError`), nunca recria demonstração. Regras: toda substituição do workspace inteiro guarda antes a cópia de segurança e **aborta sem alterar nada** se não conseguir guardá-la; a troca é uma única chamada `setItem` (tudo ou nada); `deleteTraining` também guarda a cópia. O formato do arquivo de backup e as regras de importação estão em [DATA_SAFETY.md](DATA_SAFETY.md).
 
 Limitações: um só navegador, sem multiusuário, sem fotos. **Os dados locais não estão sincronizados com a nuvem** e o limite do `localStorage` (cerca de 5 MB por site) restringe o volume de registros; cada gravação regrava o conjunto inteiro (adequado ao volume de uma equipe amadora, não ao backend definitivo). A proteção contra perda é o **backup em arquivo**: sem ele, limpar os dados do navegador apaga tudo.
 

@@ -31,3 +31,19 @@
   padding-left: var(--s-4);
   list-style: disc;
 }
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--s-3);
+}
+
+.facts dt {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.facts dd {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}

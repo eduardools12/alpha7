@@ -1,3 +1,4 @@
+import { Can } from '@/auth/AccessContext';
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
@@ -14,7 +15,7 @@ import { formatDuration } from './trainingFormat';
 import styles from './TrainingsListPage.module.css';
 
 export function TrainingsListPage() {
-  const { data, actions } = useWorkspace();
+  const { data, actions, backend } = useWorkspace();
   const location = useLocation();
   const navigate = useNavigate();
   const flash = (location.state as { flash?: string } | null)?.flash;
@@ -50,9 +51,9 @@ export function TrainingsListPage() {
         title="Treinos"
         subtitle="Registre tentativas por fundamento e acompanhe cada sessão"
         actions={
-          <ButtonLink to={PATHS.newTraining} variant="primary" icon="plus">
+          <Can to="trainings:write"><ButtonLink to={PATHS.newTraining} variant="primary" icon="plus">
             Novo treino
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
 
@@ -68,9 +69,9 @@ export function TrainingsListPage() {
           icon="list"
           title="Nenhum treino cadastrado"
           action={
-            <ButtonLink to={PATHS.newTraining} variant="primary" icon="plus">
+            <Can to="trainings:write"><ButtonLink to={PATHS.newTraining} variant="primary" icon="plus">
               Criar o primeiro treino
-            </ButtonLink>
+            </ButtonLink></Can>
           }
         >
           Crie um treino, escolha quem participa e os exercícios, e registre as tentativas pelo celular. As estatísticas
@@ -114,20 +115,22 @@ export function TrainingsListPage() {
                   </dl>
                   <div className={styles.actions}>
                     {open && (
-                      <ButtonLink to={PATHS.recordTraining(training.id)} variant="primary" icon="plus">
+                      <Can to="events:record"><ButtonLink to={PATHS.recordTraining(training.id)} variant="primary" icon="plus">
                         Registrar
-                      </ButtonLink>
+                      </ButtonLink></Can>
                     )}
                     <ButtonLink to={PATHS.training(training.id)} variant={open ? 'secondary' : 'primary'}>
                       Resumo
                     </ButtonLink>
-                    <ButtonLink to={PATHS.editTraining(training.id)} variant="ghost" icon="edit" aria-label={`Editar ${training.name}`}>
+                    <Can to="trainings:write"><ButtonLink to={PATHS.editTraining(training.id)} variant="ghost" icon="edit" aria-label={`Editar ${training.name}`}>
                       Editar
-                    </ButtonLink>
+                    </ButtonLink></Can>
                     {confirming !== training.id && (
-                      <Button variant="ghost" icon="trash" aria-label={`Excluir ${training.name}`} onClick={() => setConfirming(training.id)}>
-                        Excluir
-                      </Button>
+                      <Can to="trainings:delete">
+                        <Button variant="ghost" icon="trash" aria-label={`Excluir ${training.name}`} onClick={() => setConfirming(training.id)}>
+                          Excluir
+                        </Button>
+                      </Can>
                     )}
                   </div>
                   {confirming === training.id && (
@@ -153,7 +156,11 @@ export function TrainingsListPage() {
         </ul>
       )}
 
-      <p className={styles.footnote}>Os treinos ficam salvos só neste navegador (armazenamento local), sem sincronização com a nuvem.</p>
+      <p className={styles.footnote}>
+        {backend === 'remote'
+          ? 'Os treinos ficam salvos no servidor da equipe (nuvem).'
+          : 'Os treinos ficam salvos só neste navegador (armazenamento local), sem sincronização com a nuvem.'}
+      </p>
     </>
   );
 }

@@ -1,3 +1,4 @@
+import { Can } from '@/auth/AccessContext';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
@@ -146,9 +147,9 @@ export function TrainingRecordPage() {
           icon="list"
           title={exercises.length === 0 ? 'Adicione um exercício para registrar' : 'Escolha os participantes para registrar'}
           action={
-            <ButtonLink to={PATHS.editTraining(training.id)} variant="primary" icon="edit">
+            <Can to="trainings:write"><ButtonLink to={PATHS.editTraining(training.id)} variant="primary" icon="edit">
               Editar treino
-            </ButtonLink>
+            </ButtonLink></Can>
           }
         >
           {exercises.length === 0

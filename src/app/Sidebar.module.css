@@ -58,3 +58,43 @@
   font-size: var(--fs-xs);
   color: var(--a7-lilac-300);
 }
+
+.account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin-top: auto;
+  padding: var(--s-3);
+  background: rgb(255 255 255 / 0.07);
+  border-radius: var(--r-sm);
+}
+
+.account + .foot {
+  margin-top: 0;
+}
+
+.accountTeam {
+  font-weight: 650;
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
+.accountMeta {
+  font-size: var(--fs-xs);
+  color: var(--a7-lilac-100);
+  overflow-wrap: anywhere;
+}
+
+.accountOut {
+  align-self: flex-start;
+  min-height: var(--tap);
+  padding: 0;
+  background: none;
+  border: 0;
+  color: var(--a7-lilac-100);
+  font: inherit;
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-decoration: underline;
+  cursor: pointer;
+}

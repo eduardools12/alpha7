@@ -1,3 +1,4 @@
+import { Can } from '@/auth/AccessContext';
 import { useState } from 'react';
 import { PATHS } from '@/app/routes';
 import { DemoTag } from '@/components/ui/Badge';
@@ -34,9 +35,9 @@ export function LineupListPage() {
         title="Escalações"
         subtitle="Monte e guarde as escalações dos jogos"
         actions={
-          <ButtonLink to={PATHS.newLineup} variant="primary" icon="plus">
+          <Can to="lineups:write"><ButtonLink to={PATHS.newLineup} variant="primary" icon="plus">
             Nova escalação
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
 
@@ -51,9 +52,9 @@ export function LineupListPage() {
           icon="lineup"
           title="Nenhuma escalação salva"
           action={
-            <ButtonLink to={PATHS.newLineup} variant="primary" icon="plus">
+            <Can to="lineups:write"><ButtonLink to={PATHS.newLineup} variant="primary" icon="plus">
               Montar a primeira escalação
-            </ButtonLink>
+            </ButtonLink></Can>
           }
         >
           Escolha seis titulares, o líbero e os reservas; a ordem de saque é definida pela posição na quadra.
@@ -96,20 +97,22 @@ export function LineupListPage() {
                     <ButtonLink to={PATHS.lineup(lineup.id)} variant="primary" icon="edit">
                       Abrir
                     </ButtonLink>
-                    {confirming === lineup.id ? (
-                      <>
-                        <Button variant="danger" icon="trash" onClick={() => void remove(lineup.id)}>
-                          Confirmar exclusão
+                    <Can to="lineups:write">
+                      {confirming === lineup.id ? (
+                        <>
+                          <Button variant="danger" icon="trash" onClick={() => void remove(lineup.id)}>
+                            Confirmar exclusão
+                          </Button>
+                          <Button variant="ghost" onClick={() => setConfirming(null)}>
+                            Cancelar
+                          </Button>
+                        </>
+                      ) : (
+                        <Button variant="ghost" icon="trash" onClick={() => setConfirming(lineup.id)}>
+                          Excluir
                         </Button>
-                        <Button variant="ghost" onClick={() => setConfirming(null)}>
-                          Cancelar
-                        </Button>
-                      </>
-                    ) : (
-                      <Button variant="ghost" icon="trash" onClick={() => setConfirming(lineup.id)}>
-                        Excluir
-                      </Button>
-                    )}
+                      )}
+                    </Can>
                   </div>
                 </Card>
               </li>

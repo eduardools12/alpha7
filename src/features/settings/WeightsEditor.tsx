@@ -52,9 +52,11 @@ function parse(inputs: Inputs): Parsed {
 interface WeightsEditorProps {
   saved: OverallWeights;
   onSave: (weights: OverallWeights) => Promise<void>;
+  /** Papel sem permissão de alterar os pesos: mostra os valores, mas não deixa salvar. */
+  readOnly?: boolean;
 }
 
-export function WeightsEditor({ saved, onSave }: WeightsEditorProps) {
+export function WeightsEditor({ saved, onSave, readOnly = false }: WeightsEditorProps) {
   const [inputs, setInputs] = useState<Inputs>(() => toInputs(saved));
   const [position, setPosition] = useState<Position>('ponteiro');
   const [saving, setSaving] = useState(false);
@@ -161,10 +163,10 @@ export function WeightsEditor({ saved, onSave }: WeightsEditorProps) {
       {message && <Notice tone={message.tone}>{message.text}</Notice>}
 
       <div className={styles.actions}>
-        <Button variant="ghost" disabled={isDefault} onClick={() => setInputs(toInputs(DEFAULT_OVERALL_WEIGHTS))}>
+        <Button variant="ghost" disabled={isDefault || readOnly} onClick={() => setInputs(toInputs(DEFAULT_OVERALL_WEIGHTS))}>
           Restaurar pesos padrão
         </Button>
-        <Button variant="primary" icon="save" disabled={!dirty || hasProblems || saving} onClick={() => void submit()}>
+        <Button variant="primary" icon="save" disabled={!dirty || hasProblems || saving || readOnly} onClick={() => void submit()}>
           {saving ? 'Salvando…' : 'Salvar pesos'}
         </Button>
       </div>

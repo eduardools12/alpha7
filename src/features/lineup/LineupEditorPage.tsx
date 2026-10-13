@@ -1,3 +1,4 @@
+import { Can, useCan } from '@/auth/AccessContext';
 import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
@@ -55,6 +56,7 @@ export function LineupEditorPage() {
 
 function Editor({ lineupId }: { lineupId: string | undefined }) {
   const { data, actions } = useWorkspace();
+  const canWrite = useCan('lineups:write');
   const navigate = useNavigate();
   const saved = lineupId ? data.lineups.find((l) => l.id === lineupId) : undefined;
 
@@ -103,9 +105,9 @@ function Editor({ lineupId }: { lineupId: string | undefined }) {
           icon="users"
           title="Cadastre atletas antes de montar a escalação"
           action={
-            <ButtonLink to={PATHS.newPlayer} variant="primary" icon="plus">
+            <Can to="players:write"><ButtonLink to={PATHS.newPlayer} variant="primary" icon="plus">
               Adicionar jogador
-            </ButtonLink>
+            </ButtonLink></Can>
           }
         >
           A escalação usa os atletas do elenco.
@@ -168,7 +170,13 @@ function Editor({ lineupId }: { lineupId: string | undefined }) {
             <Button disabled title="O gerador de artes ainda está em desenvolvimento">
               Gerar arte (em breve)
             </Button>
-            <Button variant="primary" icon="save" disabled={hasErrors || saving || !dirty} onClick={() => void onSave()}>
+            <Button
+              variant="primary"
+              icon="save"
+              disabled={hasErrors || saving || !dirty || !canWrite}
+              {...(canWrite ? {} : { title: 'Seu papel permite ver a escalação, mas não salvar' })}
+              onClick={() => void onSave()}
+            >
               {saving ? 'Salvando…' : 'Salvar escalação'}
             </Button>
           </>

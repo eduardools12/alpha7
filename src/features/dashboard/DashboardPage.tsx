@@ -1,3 +1,4 @@
+import { Can } from '@/auth/AccessContext';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
@@ -62,9 +63,9 @@ export function DashboardPage() {
           icon="dashboard"
           title="Ainda não há dados da equipe"
           action={
-            <ButtonLink to={PATHS.newPlayer} variant="primary" icon="plus">
+            <Can to="players:write"><ButtonLink to={PATHS.newPlayer} variant="primary" icon="plus">
               Adicionar jogador
-            </ButtonLink>
+            </ButtonLink></Can>
           }
         >
           O dashboard mostra o elenco, a evolução das avaliações e, no futuro, treinos e partidas. Comece cadastrando os
@@ -175,9 +176,9 @@ export function DashboardPage() {
           ) : (
             <>
               <p className={styles.muted}>Nenhum treino cadastrado ainda.</p>
-              <ButtonLink to={PATHS.newTraining} icon="plus">
+              <Can to="trainings:write"><ButtonLink to={PATHS.newTraining} icon="plus">
                 Criar treino
-              </ButtonLink>
+              </ButtonLink></Can>
             </>
           )}
         </Card>
@@ -242,12 +243,12 @@ export function DashboardPage() {
 
         <Card title="Atalhos rápidos">
           <div className={styles.shortcuts}>
-            <ButtonLink to={PATHS.newPlayer} icon="plus">
+            <Can to="players:write"><ButtonLink to={PATHS.newPlayer} icon="plus">
               Adicionar jogador
-            </ButtonLink>
-            <ButtonLink to={PATHS.newLineup} icon="lineup">
+            </ButtonLink></Can>
+            <Can to="lineups:write"><ButtonLink to={PATHS.newLineup} icon="lineup">
               Montar escalação
-            </ButtonLink>
+            </ButtonLink></Can>
             <ButtonLink to={PATHS.roster} icon="users">
               Ver elenco
             </ButtonLink>

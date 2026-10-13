@@ -1,6 +1,9 @@
+import { useCan } from '@/auth/AccessContext';
 import { Card } from '@/components/ui/Card';
+import { Notice } from '@/components/ui/Notice';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useWorkspace } from '@/data/WorkspaceProvider';
+import { AccountPanel } from './AccountPanel';
 import { BackupPanel } from './BackupPanel';
 import { DataPanel } from './DataPanel';
 import { WeightsEditor } from './WeightsEditor';
@@ -16,17 +19,23 @@ const PALETTE = [
 
 export function SettingsPage() {
   const { data, actions } = useWorkspace();
+  const canEditWeights = useCan('weights:write');
 
   return (
     <>
       <PageHeader title="Configurações" subtitle="Backup, dados, cálculo do Overall e identidade" />
+
+      <AccountPanel />
 
       <BackupPanel />
 
       <DataPanel />
 
       <Card title="Cálculo do Overall">
-        <WeightsEditor saved={data.settings.weights} onSave={actions.saveWeights} />
+        {!canEditWeights && (
+          <Notice tone="info">Com o seu papel você pode ver os pesos, mas só a comissão técnica pode alterá-los.</Notice>
+        )}
+        <WeightsEditor saved={data.settings.weights} onSave={actions.saveWeights} readOnly={!canEditWeights} />
       </Card>
 
       <Card title="Identidade da equipe">

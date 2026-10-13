@@ -14,7 +14,7 @@ import styles from './BackupPanel.module.css';
  * Importar nunca altera nada até a confirmação explícita; arquivo inválido é rejeitado por inteiro.
  */
 export function BackupPanel() {
-  const { data } = useWorkspace();
+  const { data, backend } = useWorkspace();
   const status = useBackupStatus();
   const exporter = useBackupExport();
 
@@ -57,11 +57,21 @@ export function BackupPanel() {
 
       <div className={styles.block}>
         <h3 className={styles.heading}>Restaurar de um arquivo</h3>
-        <p className={styles.muted}>
-          Escolha um backup exportado pelo Alpha7. O arquivo é verificado por inteiro antes de qualquer mudança, e nada é alterado
-          até você confirmar.
-        </p>
-        <BackupImport mode="replace" current={summarizeWorkspace(data)} />
+        {backend === 'remote' ? (
+          <Notice tone="info" title="Restaurar backup não está disponível com os dados na nuvem">
+            Nesta fase, o aplicativo não substitui os dados da equipe no servidor por um arquivo: isso apagaria o histórico de todos os
+            integrantes sem volta. Exportar continua funcionando e gera uma cópia do que está na nuvem agora. A importação segura dos
+            backups para a nuvem é uma etapa futura.
+          </Notice>
+        ) : (
+          <>
+            <p className={styles.muted}>
+              Escolha um backup exportado pelo Alpha7. O arquivo é verificado por inteiro antes de qualquer mudança, e nada é alterado
+              até você confirmar.
+            </p>
+            <BackupImport mode="replace" current={summarizeWorkspace(data)} />
+          </>
+        )}
       </div>
     </Card>
   );

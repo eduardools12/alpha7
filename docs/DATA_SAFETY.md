@@ -1,6 +1,6 @@
 # Segurança dos dados
 
-Auditoria da persistência do Alpha7 antes do uso com dados reais da equipe, e as proteções implementadas nas versões 0.3 e 0.3.1. Escrito a partir do código (`src/data/`, `src/features/settings/`) e dos testes; onde algo é limite ou risco que **continua existindo**, está dito.
+Auditoria da persistência do Alpha7 antes do uso com dados reais da equipe, e as proteções implementadas nas versões 0.3, 0.3.1 e 0.4.0 (esta última, o backend Supabase opcional: seção 10). Escrito a partir do código (`src/data/`, `src/features/settings/`) e dos testes; onde algo é limite ou risco que **continua existindo**, está dito.
 
 > **Resumo.** Os dados vivem só no `localStorage` deste navegador. Não há servidor, nuvem nem sincronização. Quem apaga os dados do navegador, troca de perfil/aparelho ou perde o disco perde tudo, **a não ser que tenha um backup em arquivo**. A v0.3 acrescenta backup e restauração validados, cópia de segurança automática antes de qualquer substituição, confirmação com descrição do impacto e verificação de integridade. A migração para o Supabase **não** foi iniciada.
 >
@@ -33,7 +33,7 @@ Gravidade: **A** pode causar perda de dados reais; **M** pode causar perda ou da
 | 7 | **Pesos do Overall inválidos eram trocados em silêncio pelos padrões** ao abrir (`readWeights`) e gravados por cima na próxima alteração | M | **Aberto (baixo risco)**: só ocorre se o JSON salvo for editado à mão ou corrompido. O backup valida os pesos e **recusa** pesos inválidos em vez de trocá-los. Não alteramos o comportamento de abertura para não mudar funcionalidade sem necessidade |
 | 8 | **Duas abas abertas**: cada uma lê o workspace uma vez e regrava o conjunto inteiro; a última a gravar vence e pode apagar o que a outra fez | M | **Mitigado**: o app escuta o evento `storage` e recarrega em silêncio quando outra aba grava; `savePlayer` revalida a camisa única contra o dado atual. **Risco residual**: se as duas abas gravarem quase ao mesmo tempo, a última vence (sem bloqueio entre abas). Use uma aba por vez |
 | 9 | **Restaurar a demonstração zerava os pesos do Overall** personalizados | B | **Resolvido**: os pesos atuais são mantidos em "Restaurar demonstração" e em "Apagar tudo" |
-| 10 | **Sem versão do app visível**, difícil dizer de que versão veio um arquivo | B | **Resolvido**: `src/version.ts` (igual ao `package.json`, com teste; hoje 0.3.1), exibida na barra lateral e gravada no backup |
+| 10 | **Sem versão do app visível**, difícil dizer de que versão veio um arquivo | B | **Resolvido**: `src/version.ts` (igual ao `package.json`, com teste; hoje 0.4.0), exibida na barra lateral e gravada no backup |
 | 11 | **Camisa única só era garantida na tela** do cadastro | B | **Resolvido**: o gateway recusa (`IntegrityError`) camisa já usada por outro atleta |
 
 ### O que cada ação destrutiva sobrescreve
@@ -71,7 +71,7 @@ Nome: `alpha7-backup-AAAA-MM-DD-HHmm.json` (data e hora **locais**, para dois ba
 {
   "format": "alpha7-backup",          // identifica o tipo de arquivo
   "formatVersion": 1,                  // versão do FORMATO do arquivo
-  "appVersion": "0.3.1",               // versão do app que exportou (informativa)
+  "appVersion": "0.4.0",               // versão do app que exportou (informativa)
   "workspaceSchemaVersion": 1,         // versão do esquema dos dados
   "exportedAt": "2026-10-12T21:05:00.000Z",
   "counts": { "players": 18, "evaluations": 40, ... },   // para a prévia e conferência
@@ -173,9 +173,20 @@ Nunca substitui em silêncio. O painel descreve o impacto, mostra "Hoje o worksp
 - **Verificar integridade**: roda a validação estrita sobre o que está salvo e lista os problemas.
 - **Persistência**: o app pede `navigator.storage.persist()` e informa o resultado. Mesmo concedida, isso reduz mas **não elimina** o risco de perda.
 
-## 10. Migração ao Supabase (fase 1 feita no banco; o app ainda é local)
+## 10. Backend Supabase (0.4.0) e migração dos dados locais
 
-**Estado:** o projeto `alpha7` existe, com esquema, RLS por equipe e testes de segurança (`supabase/`). O aplicativo **não** o usa: continua em `localStorage`, e **nenhum dado real foi para a nuvem**. Não envie dados reais antes de existir login (fase seguinte). Detalhes, papéis e limites: `supabase/README.md`. O que vale para a migração dos dados locais:
+**Estado:** o projeto `alpha7` tem esquema, RLS por equipe e testes de segurança, e o aplicativo já sabe usá-lo (login, equipe, papéis, `SupabaseGateway`), **mas só com `VITE_DATA_BACKEND=supabase`**. O padrão continua `local`. **Nenhum dado real foi para a nuvem** e não existe cópia automática do local para o remoto. Detalhes, papéis e limites: `supabase/README.md`.
+
+**O que muda para a segurança dos dados quando o backend é `supabase`:**
+
+- **Quem protege os dados é a RLS do banco.** A URL e a chave publishable ficam no navegador por desenho; sem login e sem pertencer à equipe, nada é lido. A chave `service_role`/`sb_secret_` é recusada pelo app. O frontend esconde botões por papel, mas o banco recusa de qualquer forma (testado no banco real, com recusa traduzida em mensagem e nunca em sucesso falso).
+- **Dados locais e remotos nunca se misturam e nunca se trocam sozinhos:** configuração inválida é erro explícito; remoto vazio abre vazio (nunca demonstração); falha de leitura (sem conexão, sessão vencida, dado inesperado) é erro com "Tentar de novo", sem criar nada. Sair ou trocar de equipe limpa os dados da tela.
+- **O que se perde em relação ao local (riscos novos):** não há cópia de segurança automática nem "desfazer" na nuvem; **excluir treino é definitivo** (cascata no banco; só o coach; a interface confirma com as contagens); restaurar demonstração, apagar tudo e importar backup **não existem** com dados na nuvem (seriam destrutivos para todos os integrantes). O backup em arquivo continua disponível e **recomendado** (exportar lê o que está no servidor).
+- **Sem transação entre tabelas** ao salvar escalações e treinos (ver `supabase/README.md`, limite 1): falha no meio pode deixar o salvamento incompleto; o gateway tenta restaurar a escalação e avisa; repetir conclui o treino.
+- **Duas pessoas editando:** a última gravação vence; não há aviso de conflito nem tempo real.
+- **Contas e senhas** são do Supabase Auth (sem cadastro público no app). Recuperação de senha depende de ajustes no painel. A sessão fica no navegador (como todo login web): em computador compartilhado, use "Sair".
+
+O que vale para a futura migração dos dados locais:
 
 Preservar, como contrato:
 
@@ -184,8 +195,8 @@ Preservar, como contrato:
 - Os registros de treino **com `voidedAt`** (anulação em vez de exclusão) e a **`attemptKey`** única (idempotência).
 - A camisa única, a taxonomia de fundamentos/resultados (`src/domain/fundamentals.ts`) e os pesos do Overall.
 - O **arquivo de backup** é a fonte recomendada da migração (já validado, com vínculos e checksum). Fazer a importação para o banco **numa transação**, com prévia, como na importação local.
-- O contrato `DataGateway` (`replaceWorkspace`, `snapshotInfo`, `restoreSnapshot`, `exportRaw`, `subscribe`, `usage`) deve ser reinterpretado para o novo backend: no Supabase, cópia de segurança = backup/PITR do banco, `subscribe` = Realtime, `usage` pode ficar `null`.
-- Só a chave **anon/publicável** pode ir ao frontend.
+- O contrato `DataGateway` já foi reinterpretado para o remoto (0.4.0): `replaceWorkspace`/`restoreSnapshot` recusam, `snapshotInfo`/`exportRaw`/`usage` devolvem vazio, `subscribe` é nulo. A importação transacional (tudo ou nada, com prévia) é a próxima etapa e precisará de função própria no banco.
+- Só a chave **publishable/anon** vai ao frontend (e o app recusa a secreta).
 
 ## 11. Limites e riscos que continuam
 
@@ -208,4 +219,7 @@ Preservar, como contrato:
 - `src/features/settings/backup.test.tsx`: exportar, prévia, confirmar, cancelar, arquivo inválido sem alteração, falha durante a restauração sem perda, confirmação reforçada da demonstração e de apagar tudo, desfazer, verificar integridade, uso do armazenamento, lembrete, atualização por outra aba.
 - `src/features/startup/startup.test.tsx`: primeiro acesso sem dados prévios (nada gravado antes da escolha; vazio; demonstração; importar backup; falha de gravação), carregamento normal de workspace existente (sem regravar; marca de uso; inconsistência não bloqueia; demonstração misturada anunciada), perda da chave principal com cada rastro, tentar novamente (ainda ausente e com os dados de volta), cópia automática (baixar, restaurar, ilegível), importação na recuperação (sucesso, arquivo adulterado, falha de gravação, cancelar), workspace novo só após confirmação (cancelar, vazio, demonstração), dados ilegíveis (texto preservado, baixar, cópia de segurança, cota cheia) e a garantia de que seis cenários de dado ausente ou inválido nunca viram demonstração em silêncio.
 - `e2e/startup.spec.ts` (Playwright, navegador real, localStorage de verdade): escolha de primeira utilização sem gravar nada, vazio e demonstração persistindo ao recarregar, chave removida abre a recuperação, importar backup, arquivo adulterado, tentar novamente, workspace novo com confirmação, dado ilegível (baixar, cancelar, confirmar), axe e ausência de rolagem horizontal a 1280 px e 360 px. Os demais testes de navegador passam pela escolha de verdade por meio de `e2e/fixtures.ts`.
+- `src/data/supabase/*.test.ts`, `src/auth/*.test.*`, `src/app/remote.test.tsx` (0.4.0): login, sessão, equipe, papéis, gateway remoto, erros e não mistura local/remoto, contra um **cliente Supabase simulado** (não provam a RLS real).
+- `supabase/tests/rls.test.sql` e `gateway_shapes.test.sql` (0.4.0): **no banco real**, em transação que termina sempre em exceção `TESTES_OK` (nada persiste): RLS, privilégios, papéis, integridade, append-only e as formas de SQL do gateway.
+- `e2e/auth.spec.ts` (Playwright, 0.4.0): login em navegador real com o backend Supabase apontando para endereço inexistente (acessibilidade, layout, falha de rede real).
 - `e2e/backup.spec.ts` (Playwright, navegador real): download de verdade, apagar e restaurar, arquivo adulterado e lixo recusados, cancelar, desfazer, demonstração mantendo pesos, lembrete, axe (acessibilidade) e ausência de rolagem horizontal em 1280 px e 360 px.

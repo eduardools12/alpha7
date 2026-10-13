@@ -47,7 +47,8 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Dados | Inicialização segura: sem workspace o app pergunta como começar (vazio, demonstração ou backup) ou abre a recuperação; nunca cria demonstração por conta própria | Feito (0.3.1). Não detecta toda perda de dados: ver DATA_SAFETY.md, seção 7 |
 | Dados | Backup em arquivo JSON com versão de formato e checksum; importação segura com prévia e confirmação; cópia automática antes de substituir; verificar integridade; lembrete de backup | Feito (v0.3). Ver `DATA_SAFETY.md` |
 | Dados | Supabase fase 1: projeto, esquema, RLS por equipe, papéis (coach/analyst/viewer), testes no banco | Feito no banco (ver `supabase/README.md`); o app ainda não o usa |
-| Dados | Login, uso do Supabase pelo app (`SupabaseGateway`), importação dos dados locais, multiusuário na interface, imagens, sincronização | Planejado |
+| Dados | Login por e-mail e senha (sem cadastro público), recuperação de senha, escolha/criação de equipe, papéis coach/analyst/viewer na interface, `SupabaseGateway`, adicionar pessoas à equipe (coach, pela função do banco) | Feito (0.4.0), **desligado por padrão** (`VITE_DATA_BACKEND=supabase`). Login real e e-mail de redefinição dependem de ajustes no painel e não foram testados |
+| Dados | Importação dos dados locais para a nuvem, restaurar/substituir workspace remoto, tempo real, imagens, sincronização | Planejado |
 
 ### Limitações conhecidas da escalação (Parcial)
 
@@ -114,6 +115,18 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 - [x] "Restaurar demonstração" e "Apagar todos os dados" descrevem o impacto, recomendam backup e exigem confirmação; o conteúdo anterior fica guardado para desfazer.
 - [x] Funcionalidades anteriores seguem funcionando (suíte completa).
 - [ ] **Aberto:** a proteção contra perda do aparelho/navegador depende de a pessoa guardar o arquivo (ver riscos em `DATA_SAFETY.md`).
+
+### Supabase fase 2 (0.4.0: login, equipe e dados remotos; verificados com cliente simulado e, nas políticas, no banco real)
+
+- [x] `local` continua o padrão e funciona como antes, sem login; valor inválido de `VITE_DATA_BACKEND` mostra erro e não troca de backend.
+- [x] Com `supabase`: sem sessão só aparece o login; não há cadastro público; sair e sessão expirada limpam os dados da tela.
+- [x] Login com validação, mensagens claras, carregamento, recuperação de senha e tela de nova senha.
+- [x] Sem equipe: criar equipe (função `create_team`, vira coach, sem duplicar por clique repetido); uma equipe abre sozinha; várias pedem escolha; trocar de equipe limpa a anterior.
+- [x] Papéis na interface: viewer só lê; analyst registra; coach faz tudo. Rotas de escrita barradas por endereço. O banco recusa o que a interface esconderia.
+- [x] `SupabaseGateway`: leitura paginada, ids e vínculos preservados, registros idempotentes e anuláveis, erros de conexão/permissão/sessão sem perda silenciosa.
+- [x] Nenhum dado local copiado para a nuvem; dados locais e remotos não se misturam.
+- [ ] **Pendente (manual):** contas, *Site URL*/*Redirect URLs* e SMTP no painel do Supabase (`supabase/README.md`). Login com conta real e e-mail de redefinição ainda sem teste ponta a ponta.
+- [ ] **Pendente:** escalações/treinos gravam em etapas (sem transação entre tabelas); excluir treino é definitivo na nuvem; sem tempo real.
 
 ### Módulos futuros (resumo; detalhar antes de implementar)
 

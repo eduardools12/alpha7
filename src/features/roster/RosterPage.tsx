@@ -1,3 +1,4 @@
+import { Can } from '@/auth/AccessContext';
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
@@ -77,9 +78,9 @@ export function RosterPage() {
         title="Elenco"
         subtitle="Gestão de atletas e performance"
         actions={
-          <ButtonLink to={PATHS.newPlayer} variant="primary" icon="plus">
+          <Can to="players:write"><ButtonLink to={PATHS.newPlayer} variant="primary" icon="plus">
             Adicionar jogador
-          </ButtonLink>
+          </ButtonLink></Can>
         }
       />
 
@@ -88,9 +89,9 @@ export function RosterPage() {
           icon="users"
           title="O elenco está vazio"
           action={
-            <ButtonLink to={PATHS.newPlayer} variant="primary" icon="plus">
+            <Can to="players:write"><ButtonLink to={PATHS.newPlayer} variant="primary" icon="plus">
               Cadastrar o primeiro atleta
-            </ButtonLink>
+            </ButtonLink></Can>
           }
         >
           Cadastre os atletas para avaliar, escalar e acompanhar a evolução de cada um.

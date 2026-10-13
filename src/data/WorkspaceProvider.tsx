@@ -15,11 +15,18 @@ import type { OverallWeights } from '@/domain/overall';
 import type { Evaluation, Player, PlayerDraft } from '@/domain/player';
 import type { Attributes } from '@/domain/attributes';
 import { APP_VERSION } from '@/version';
+import { useAccess } from '@/auth/AccessContext';
+import { CAPABILITY_LABEL, ROLE_LABEL, type Capability } from '@/auth/permissions';
 import { createBackup, validateWorkspace, type WorkspaceSummary, type WorkspaceValidation } from './backup';
 import { readLastBackup, writeLastBackup, type LastBackup } from './backupMeta';
 import { createDemoWorkspace, createEmptyWorkspace } from './demo';
 import {
   IntegrityError,
+  PermissionDeniedError,
+  RemoteDataError,
+  RemoteOperationUnavailableError,
+  RemoteUnavailableError,
+  SessionExpiredError,
   StorageCorruptedError,
   WorkspaceMissingError,
   type DataGateway,
@@ -140,6 +147,8 @@ export interface WorkspaceValue {
    * o uso: avisa e leva para "Verificar integridade". Atualizado ao carregar/substituir, não a cada edição.
    */
   integrityProblems: number;
+  /** `local`: dados neste navegador. `remote`: dados da equipe no Supabase (sem substituir workspace, sem cópia local). */
+  backend: 'local' | 'remote';
   /** false: sem armazenamento do navegador, as alterações se perdem ao recarregar. */
   persistent: boolean;
   data: Workspace;
@@ -163,20 +172,33 @@ function countProblems(workspace: Workspace): number {
   }
 }
 
+/** Erros cuja mensagem já foi escrita para a pessoa (não vazam detalhes técnicos). */
+function isUserFacing(error: unknown): error is Error {
+  return (
+    error instanceof IntegrityError ||
+    error instanceof PermissionDeniedError ||
+    error instanceof SessionExpiredError ||
+    error instanceof RemoteUnavailableError ||
+    error instanceof RemoteDataError ||
+    error instanceof RemoteOperationUnavailableError
+  );
+}
+
 /** Garante que a mensagem mostrada à pessoa seja compreensível, sem vazar detalhes técnicos. */
 async function guarded<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
     if (error instanceof DomainRuleError) throw error;
-    // Violação de integridade: a mensagem já é compreensível (ex.: "o treino não existe").
-    if (error instanceof IntegrityError) throw new DomainRuleError(error.message);
+    // Erros já traduzidos pelo gateway (integridade, permissão, sessão, conexão): a mensagem é compreensível.
+    if (isUserFacing(error)) throw new DomainRuleError(error.message);
     throw new Error(SAVE_FAILED, { cause: error });
   }
 }
 
 export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway; children: ReactNode }) {
   const [gw] = useState<DataGateway>(() => gateway ?? new LocalStorageGateway());
+  const access = useAccess();
   const [status, setStatus] = useState<WorkspaceStatus>('loading');
   const [error, setError] = useState<string | null>(null);
   const [recoveryReason, setRecoveryReason] = useState<RecoveryReason | null>(null);
@@ -220,7 +242,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
         setRecoveryReason('unreadable');
         setStatus('recovery');
       } else {
-        setError('Não foi possível abrir os dados salvos.');
+        setError(isUserFacing(cause) ? cause.message : 'Não foi possível abrir os dados salvos.');
         setRecoveryReason(null);
         setStatus('error');
       }
@@ -251,10 +273,20 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
   // Pede ao navegador que não apague os dados sozinho quando faltar espaço. Pode ser negado: tudo bem.
   useEffect(() => {
-    if (status === 'ready' && gw.persistent) void navigator.storage?.persist?.().catch(() => undefined);
+    if (status === 'ready' && gw.kind === 'local' && gw.persistent) void navigator.storage?.persist?.().catch(() => undefined);
   }, [status, gw]);
 
   const actions = useMemo<WorkspaceActions>(() => {
+    /**
+     * Confere o papel ANTES de tentar gravar. É conforto de interface (mensagem clara): quem decide de verdade
+     * é a RLS do banco, que recusaria a escrita de qualquer forma.
+     */
+    const allow = (capability: Capability) => {
+      if (access.can(capability)) return;
+      const role = access.role ? ROLE_LABEL[access.role] : '';
+      throw new DomainRuleError(`Seu papel (${role}) não permite ${CAPABILITY_LABEL[capability]}.`);
+    };
+
     /** Troca o workspace inteiro. A cópia de segurança é feita pelo gateway antes de gravar. */
     const replace = async (next: Workspace, reason: string) => {
       await guarded(() => gw.replaceWorkspace(next, reason));
@@ -265,6 +297,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
     return {
       async createPlayer(draft, firstEvaluation) {
         return guarded(async () => {
+          allow('players:write');
           if (data.players.some((p) => p.jerseyNumber === draft.jerseyNumber)) {
             throw new DomainRuleError(`O número ${draft.jerseyNumber} já está em uso.`);
           }
@@ -293,6 +326,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async updatePlayer(id, draft) {
         return guarded(async () => {
+          allow('players:write');
           const current = data.players.find((p) => p.id === id);
           if (!current) throw new DomainRuleError('Este atleta não existe mais no elenco.');
           if (data.players.some((p) => p.id !== id && p.jerseyNumber === draft.jerseyNumber)) {
@@ -307,6 +341,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async addEvaluation(playerId, input) {
         return guarded(async () => {
+          allow('evaluations:add');
           if (!data.players.some((p) => p.id === playerId)) {
             throw new DomainRuleError('Este atleta não existe mais no elenco.');
           }
@@ -325,6 +360,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async saveLineup(lineup) {
         return guarded(async () => {
+          allow('lineups:write');
           const saved: Lineup = { ...lineup, updatedAt: new Date().toISOString() };
           await gw.saveLineup(saved);
           setData((prev) => ({
@@ -339,6 +375,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async deleteLineup(id) {
         await guarded(async () => {
+          allow('lineups:write');
           await gw.deleteLineup(id);
           setData((prev) => ({ ...prev, lineups: prev.lineups.filter((l) => l.id !== id) }));
         });
@@ -346,6 +383,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async saveWeights(weights) {
         await guarded(async () => {
+          allow('weights:write');
           const settings = { ...data.settings, weights };
           await gw.saveSettings(settings);
           setData((prev) => ({ ...prev, settings }));
@@ -354,6 +392,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async saveTraining(trainingId, draft) {
         return guarded(async () => {
+          allow('trainings:write');
           const current = latest.current;
           const existing = trainingId ? (current.trainings.find((t) => t.id === trainingId) ?? null) : null;
           if (trainingId && !existing) throw new DomainRuleError('Este treino não existe mais.');
@@ -379,6 +418,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async deleteTraining(trainingId) {
         await guarded(async () => {
+          allow('trainings:delete');
           await gw.deleteTraining(trainingId);
           setData((prev) => ({
             ...prev,
@@ -392,6 +432,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async setTrainingStatus(trainingId, status) {
         return guarded(async () => {
+          allow('trainings:write');
           const current = latest.current;
           const existing = current.trainings.find((t) => t.id === trainingId);
           if (!existing) throw new DomainRuleError('Este treino não existe mais.');
@@ -413,6 +454,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async recordTrainingEvent(input) {
         return guarded(async () => {
+          allow('events:record');
           const current = latest.current;
           const outcome = buildTrainingEvent(
             { ...input, id: newId('event'), recordedAt: new Date().toISOString() },
@@ -437,6 +479,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       async undoTrainingEvent(eventId) {
         await guarded(async () => {
+          allow('events:record');
           const target = latest.current.trainingEvents.find((e) => e.id === eventId);
           if (!target) throw new DomainRuleError('Este registro não existe mais.');
           if (target.voidedAt !== null) return; // já desfeito: repetir não faz nada
@@ -499,10 +542,10 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
         return validateWorkspace(JSON.parse(JSON.stringify(fresh)) as unknown);
       },
     };
-  }, [gw, data, load, applyLoaded]);
+  }, [gw, data, load, applyLoaded, access]);
 
   const value = useMemo<WorkspaceValue>(
-    () => ({ status, snapshot, lastBackup, error, recoveryReason, integrityProblems, persistent: gw.persistent, data, actions }),
+    () => ({ status, snapshot, lastBackup, error, recoveryReason, integrityProblems, backend: gw.kind, persistent: gw.persistent, data, actions }),
     [status, snapshot, lastBackup, error, recoveryReason, integrityProblems, gw, data, actions],
   );
 
