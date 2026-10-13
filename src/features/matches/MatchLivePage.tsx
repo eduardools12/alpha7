@@ -4,6 +4,7 @@ import { Can, useCan } from '@/auth/AccessContext';
 import { PATHS } from '@/app/routes';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ConnectionNotice, useCloudOffline } from '@/components/ui/ConnectionNotice';
 import { Chip } from '@/components/ui/Chip';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SelectField } from '@/components/ui/Field';
@@ -24,6 +25,7 @@ import {
   type Side,
 } from '@/domain/match';
 import { shortName, type Player } from '@/domain/player';
+import { useWakeLock } from '@/pwa/hooks';
 import { RotationCourt } from './RotationCourt';
 import { SetStartPanel } from './SetStartPanel';
 import { rallyDescription, runningScores } from './rallyText';
@@ -39,6 +41,7 @@ interface Toast {
 }
 
 export function MatchLivePage() {
+  useWakeLock(); // a tela não apaga durante o jogo
   const { matchId } = useParams();
   const { data, actions } = useWorkspace();
   const canWrite = useCan('matches:write');
@@ -48,16 +51,18 @@ export function MatchLivePage() {
   const [involvedId, setInvolvedId] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
+  const offline = useCloudOffline();
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<number | null>(null);
   const [concluding, setConcluding] = useState(false);
   const [detailPlayer, setDetailPlayer] = useState('');
   const [detailFundamental, setDetailFundamental] = useState<Fundamental>('saque');
 
+  /** Sucesso some sozinho; ERRO fica até o próximo aviso: num ginásio barulhento ninguém pode achar que o ponto entrou. */
   const showToast = (next: Toast) => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
     setToast(next);
-    toastTimer.current = window.setTimeout(() => setToast(null), TOAST_MS);
+    toastTimer.current = next.kind === 'error' ? null : window.setTimeout(() => setToast(null), TOAST_MS);
   };
 
   if (!match) {
@@ -80,6 +85,10 @@ export function MatchLivePage() {
   /** Um toque por vez: enquanto uma gravação não termina, os outros toques são ignorados (nada duplica). */
   const guarded = async (work: () => Promise<void>, success?: string) => {
     if (inFlight.current) return;
+    if (offline) {
+      showToast({ kind: 'error', text: 'Sem conexão com a nuvem: nada foi gravado. Espere a conexão voltar.' });
+      return;
+    }
     inFlight.current = true;
     setPending(true);
     try {
@@ -181,7 +190,7 @@ export function MatchLivePage() {
         key={reason}
         type="button"
         className={`${styles.reason} ${winner === 'us' ? styles.us : styles.them}`}
-        disabled={pending}
+        disabled={pending || offline}
         onClick={() => record(winner, reason)}
       >
         {reasonLabel(reason, winner)}
@@ -209,6 +218,8 @@ export function MatchLivePage() {
   return (
     <>
       {header}
+
+      <ConnectionNotice />
 
       <div className={styles.toastArea} aria-live="polite">
         {toast && (
@@ -310,13 +321,13 @@ export function MatchLivePage() {
 
               <div className={styles.sides}>
                 <section className={styles.side} aria-label="Ponto do Alpha7">
-                  <button type="button" className={`${styles.big} ${styles.us}`} disabled={pending} onClick={() => record('us', null)}>
+                  <button type="button" className={`${styles.big} ${styles.us}`} disabled={pending || offline} onClick={() => record('us', null)}>
                     Ponto do Alpha7
                   </button>
                   <div className={styles.reasons}>{reasonButtons('us')}</div>
                 </section>
                 <section className={styles.side} aria-label="Ponto do adversário">
-                  <button type="button" className={`${styles.big} ${styles.them}`} disabled={pending} onClick={() => record('them', null)}>
+                  <button type="button" className={`${styles.big} ${styles.them}`} disabled={pending || offline} onClick={() => record('them', null)}>
                     Ponto do adversário
                   </button>
                   <div className={styles.reasons}>{reasonButtons('them')}</div>

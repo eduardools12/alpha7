@@ -6,6 +6,7 @@ import { Jersey } from '@/components/brand/Jersey';
 import { PlayerPhoto } from '@/components/brand/PlayerPhoto';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
+import { ConnectionNotice, useCloudOffline } from '@/components/ui/ConnectionNotice';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Notice } from '@/components/ui/Notice';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -24,6 +25,7 @@ import { shortName, type Player } from '@/domain/player';
 import { lastValidEvent, recentValidEvents, validEvents, type TrainingEvent } from '@/domain/training';
 import { formatClock, playerLabel } from './trainingFormat';
 import styles from './TrainingRecordPage.module.css';
+import { useWakeLock } from '@/pwa/hooks';
 
 /** Impede toques repetidos acidentais: depois de registrar, os botões ficam bloqueados por um instante. */
 const LOCK_MS = 350;
@@ -36,6 +38,7 @@ interface Toast {
 }
 
 export function TrainingRecordPage() {
+  useWakeLock(); // a tela não apaga durante o registro
   const { trainingId } = useParams();
   const { data, actions } = useWorkspace();
   const training = data.trainings.find((t) => t.id === trainingId);
@@ -57,6 +60,7 @@ export function TrainingRecordPage() {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [fundamental, setFundamental] = useState<Fundamental>('saque');
   const [locked, setLocked] = useState(false);
+  const offline = useCloudOffline();
   const [pressed, setPressed] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const timers = useRef<number[]>([]);
@@ -92,10 +96,14 @@ export function TrainingRecordPage() {
     timers.current.push(window.setTimeout(fn, ms));
   };
 
-  /** Mostra o aviso e o apaga sozinho; um aviso novo reinicia a contagem. */
+  /** Sucesso some sozinho (um aviso novo reinicia a contagem); ERRO fica até o próximo aviso, para ninguém achar que o registro entrou. */
   const showToast = (next: Toast) => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
     setToast(next);
+    if (next.kind === 'error') {
+      toastTimer.current = null;
+      return;
+    }
     toastTimer.current = window.setTimeout(() => setToast(null), TOAST_MS);
     timers.current.push(toastTimer.current);
   };
@@ -185,6 +193,10 @@ export function TrainingRecordPage() {
 
   const record = async (outcome: string) => {
     if (locked || !currentPlayer || !currentExercise) return;
+    if (offline) {
+      showToast({ kind: 'error', text: 'Sem conexão com a nuvem: nada foi registrado. Espere a conexão voltar.' });
+      return;
+    }
     lockBriefly();
     try {
       const event = await actions.recordTrainingEvent({
@@ -206,6 +218,10 @@ export function TrainingRecordPage() {
 
   const undo = async () => {
     if (locked || !last) return;
+    if (offline) {
+      showToast({ kind: 'error', text: 'Sem conexão com a nuvem: nada foi desfeito. Espere a conexão voltar.' });
+      return;
+    }
     lockBriefly();
     try {
       await actions.undoTrainingEvent(last.id); // por id: um toque repetido não desfaz o registro anterior
@@ -218,6 +234,8 @@ export function TrainingRecordPage() {
   return (
     <>
       {header}
+
+      <ConnectionNotice />
 
       {/* Feedback de cada registro: fixo no topo da rolagem para ficar visível perto dos botões. */}
       <div className={styles.toast} role="status" aria-live="polite">
@@ -329,7 +347,7 @@ export function TrainingRecordPage() {
                     className={`${styles.outcome} ${pressed === outcome ? styles.flash : ''}`}
                     data-tone={info.tone}
                     aria-label={`${info.label}, ${info.short}`}
-                    disabled={!currentPlayer || locked}
+                    disabled={!currentPlayer || locked || offline}
                     onClick={() => void record(outcome)}
                   >
                     <span className={styles.outcomeLabel}>{info.label}</span>
@@ -397,7 +415,7 @@ export function TrainingRecordPage() {
                 ))}
               </ol>
             )}
-            <Button variant="danger" icon="rotate" disabled={!last || locked} onClick={() => void undo()}>
+            <Button variant="danger" icon="rotate" disabled={!last || locked || offline} onClick={() => void undo()}>
               Desfazer último registro
             </Button>
             {last && <p className={styles.muted}>Desfaz: {describe(last)}</p>}

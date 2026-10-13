@@ -50,6 +50,11 @@ export interface DataGateway {
    * aqui (nenhum dado é apagado ou trocado em bloco pelo aplicativo); a interface esconde esses recursos.
    */
   readonly kind: 'local' | 'remote';
+  /**
+   * Identifica ONDE estão os dados, para guardar o "último backup exportado" sem misturar workspaces:
+   * `local` no navegador, `remote.<equipe>` na nuvem. Cada equipe tem a sua marca.
+   */
+  readonly backupScope: string;
   /** false quando o armazenamento do navegador não está disponível (dados só em memória). Remoto: sempre true. */
   readonly persistent: boolean;
   /**

@@ -302,9 +302,27 @@ describe('Registro rápido: persistência e integridade', () => {
     await pickFundamental(ctx, 'Saque');
     await tap(ctx, /^Ace,/);
     expect(await screen.findByText(/Não foi possível salvar\. Verifique o espaço do navegador/)).toBeInTheDocument();
+    // O erro NÃO some sozinho como o aviso de sucesso (3,5 s): ninguém pode achar que o registro entrou.
+    await new Promise((resolve) => setTimeout(resolve, 3_800));
+    expect(screen.getByText(/Não foi possível salvar\. Verifique o espaço do navegador/)).toBeInTheDocument();
     expect(stored(ctx)).toHaveLength(0);
     expect(screen.getByText(/Nenhum registro ainda/)).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole('button', { name: /^Ace,/ })).toBeEnabled());
+  });
+
+  it('no modo local, ficar sem internet não atrapalha: sem aviso de conexão e o registro funciona', async () => {
+    Object.defineProperty(navigator, 'onLine', { value: false, configurable: true });
+    try {
+      const ctx = await open();
+      expect(screen.queryByText('Sem conexão com a nuvem')).not.toBeInTheDocument();
+      await pickPlayer(ctx);
+      await pickFundamental(ctx, 'Saque');
+      await tap(ctx, /^Ace,/);
+      expect(await screen.findByText(/Registrado: Gabriel S\. #8 · Saque Ace/)).toBeInTheDocument();
+      expect(stored(ctx)).toHaveLength(1);
+    } finally {
+      Reflect.deleteProperty(navigator, 'onLine');
+    }
   });
 
   it('treino concluído bloqueia o registro e permite reabrir', async () => {

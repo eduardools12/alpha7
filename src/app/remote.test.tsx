@@ -2,9 +2,10 @@
  * Interface com o backend Supabase e os papéis da equipe, contra o cliente SIMULADO. A interface esconde ou
  * desabilita o que o banco recusaria; a recusa de verdade vem da RLS (provada em supabase/tests/rls.test.sql).
  */
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useState } from 'react';
+import { afterEach } from 'vitest';
 import { MemoryRouter } from 'react-router-dom';
 import { AccessProvider } from '@/auth/AccessContext';
 import { AppRoutes } from '@/app/App';
@@ -308,12 +309,11 @@ describe('Interface com dados na nuvem', () => {
     expect(screen.getByRole('button', { name: 'Exportar backup' })).toBeInTheDocument();
   });
 
-  it('não mostra avisos que só fazem sentido no armazenamento local', async () => {
+  it('não mostra o aviso de armazenamento do navegador (só faz sentido no modo local)', async () => {
     const fake = seeded();
     as(fake, 'coach');
     renderRemote(fake, { path: '/elenco' });
     await screen.findByRole('link', { name: /Ana A\./ });
-    expect(screen.queryByText('Faça um backup dos dados da equipe')).not.toBeInTheDocument();
     expect(screen.queryByText('Armazenamento do navegador indisponível')).not.toBeInTheDocument();
     expect(screen.getAllByText(/dados na nuvem/).length).toBeGreaterThan(0);
   });
@@ -382,5 +382,85 @@ describe('Interface com dados na nuvem', () => {
     expect(downloads[0]).toMatch(/^alpha7-backup-.*\.json$/);
     expect(fake.calls.filter((c) => c.op !== 'select')).toEqual([]); // exportar não grava nada no servidor
     vi.restoreAllMocks();
+  });
+});
+
+describe('Registro com os dados na nuvem e sem conexão', () => {
+  const setOnline = (value: boolean) => {
+    Object.defineProperty(navigator, 'onLine', { value, configurable: true });
+    window.dispatchEvent(new Event(value ? 'online' : 'offline'));
+  };
+  afterEach(() => Reflect.deleteProperty(navigator, 'onLine'));
+
+  it('avisa que nada será gravado enquanto estiver sem rede, trava os botões e some quando a conexão volta', async () => {
+    const fake = seeded();
+    as(fake, 'coach');
+    const { user } = renderRemote(fake, { path: '/treinos/t1/registrar' });
+    await screen.findByRole('heading', { level: 1, name: 'Registrar treino' });
+    await user.click(screen.getByRole('button', { name: /Ana A., camisa 1/ }));
+    expect(screen.queryByText('Sem conexão com a nuvem')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Ace,/ })).toBeEnabled();
+
+    act(() => setOnline(false));
+    expect(await screen.findByText('Sem conexão com a nuvem')).toBeInTheDocument();
+    expect(screen.getByText(/nada fica guardado no aparelho para enviar depois/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Ace,/ })).toBeDisabled();
+    expect(fake.calls.filter((c) => c.op !== 'select')).toEqual([]); // nenhuma gravação foi tentada
+
+    act(() => setOnline(true));
+    await waitFor(() => expect(screen.queryByText('Sem conexão com a nuvem')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: /^Ace,/ })).toBeEnabled();
+  });
+});
+
+describe('Backup em arquivo com os dados na nuvem', () => {
+  const stubDownload = () => {
+    (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL = vi.fn(() => 'blob:teste');
+    (URL as unknown as { revokeObjectURL: (u: string) => void }).revokeObjectURL = vi.fn();
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+  };
+
+  it('lembra de exportar uma cópia, com o texto da nuvem, e o lembrete some depois de exportar', async () => {
+    localStorage.clear();
+    stubDownload();
+    const fake = seeded();
+    as(fake, 'coach');
+    const { user } = renderRemote(fake, { path: '/configuracoes' });
+    expect(await screen.findByText('Faça um backup dos dados da equipe')).toBeInTheDocument();
+    expect(screen.getByText(/ficam no servidor e você ainda não exportou nenhuma cópia em arquivo/)).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Exportar backup' }));
+    expect(await screen.findByText(/Backup exportado: alpha7-backup-/)).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Faça um backup dos dados da equipe')).not.toBeInTheDocument());
+    vi.restoreAllMocks();
+  });
+
+  it('a marca de último backup é por equipe e nunca usa a do modo local', async () => {
+    localStorage.clear();
+    stubDownload();
+    const fake = seeded();
+    as(fake, 'coach');
+    const { user } = renderRemote(fake, { path: '/configuracoes' });
+    await user.click(await screen.findByRole('button', { name: 'Exportar backup' }));
+    await screen.findByText(/Backup exportado: alpha7-backup-/);
+    expect(localStorage.getItem('alpha7.lastBackup.v1')).toBeNull();
+    expect(localStorage.getItem(`alpha7.lastBackup.v1.remote.${TEAM_A}`)).not.toBeNull();
+    vi.restoreAllMocks();
+  });
+
+  it('um backup do modo local não faz o lembrete da nuvem sumir', async () => {
+    localStorage.clear();
+    localStorage.setItem('alpha7.lastBackup.v1', JSON.stringify({ at: new Date().toISOString(), fingerprint: 'x', filename: 'local.json' }));
+    const fake = seeded();
+    as(fake, 'coach');
+    renderRemote(fake, { path: '/configuracoes' });
+    expect(await screen.findByText('Faça um backup dos dados da equipe')).toBeInTheDocument();
+  });
+
+  it('explica que o arquivo guarda só a referência das fotos', async () => {
+    const fake = seeded();
+    as(fake, 'coach');
+    renderRemote(fake, { path: '/configuracoes' });
+    expect(await screen.findByText('Esta é a cópia que fica fora do servidor')).toBeInTheDocument();
+    expect(screen.getByText(/guarda só a referência de cada foto, não a imagem/)).toBeInTheDocument();
   });
 });

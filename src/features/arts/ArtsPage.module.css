@@ -118,3 +118,9 @@
     top: var(--s-6);
   }
 }
+
+.exportActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}

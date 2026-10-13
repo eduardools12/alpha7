@@ -26,6 +26,14 @@ export function BackupPanel() {
         nem chaves, mas também <strong>não é criptografado</strong>: trate-o como dado da equipe.
       </p>
 
+      {backend === 'remote' && (
+        <Notice tone="info" title="Esta é a cópia que fica fora do servidor">
+          O arquivo guarda os dados da equipe que estão na nuvem agora (atletas, avaliações, escalações, treinos, partidas e registros). As
+          fotos dos atletas ficam no armazenamento da nuvem: o arquivo guarda só a referência de cada foto, não a imagem. A marca de
+          "último backup" vale para este navegador e esta equipe.
+        </Notice>
+      )}
+
       <div className={styles.block}>
         <h3 className={styles.heading}>Exportar</h3>
         <BackupStatusLine status={status} />

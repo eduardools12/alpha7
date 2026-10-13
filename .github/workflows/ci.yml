@@ -1,0 +1,55 @@
+name: Testes
+
+# Roda a cada envio e a cada pull request. Não usa segredos: o app é testado com o modo local e com o
+# Supabase SIMULADO (o projeto real nunca é tocado). As políticas do banco (RLS) não são provadas aqui:
+# elas são conferidas à parte com supabase/tests/*.test.sql, no projeto real.
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verificacao:
+    name: Tipos, testes e build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+
+  navegador:
+    name: Testes em navegador (Chrome)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: verificacao
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # O Playwright usa o Chrome instalado (channel "chrome"), que já vem no runner do GitHub.
+      - run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: relatorio-playwright
+          path: |
+            test-results
+            playwright-report
+          retention-days: 7

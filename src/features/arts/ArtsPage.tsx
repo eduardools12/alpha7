@@ -13,6 +13,7 @@ import { upcomingMatch } from '@/domain/match';
 import { UNIFORM_LABEL, shortName, type UniformColor } from '@/domain/player';
 import { formatDateTime } from '@/domain/format';
 import { ART_ASSETS } from './artAssets';
+import { canSharePng, sharePng } from './sharePng';
 import { buildLineupArtSvg, svgToDataUrl, svgToPng } from './artSvg';
 import styles from './ArtsPage.module.css';
 
@@ -78,6 +79,28 @@ export function ArtsPage() {
     [match, lineup, data.players, format, uniform, photos],
   );
   const svg = useMemo(() => (result?.ok ? buildLineupArtSvg(result.model, ART_ASSETS) : null), [result]);
+
+  // Compartilhar arquivo só existe em alguns navegadores (celulares): o botão só aparece onde funciona.
+  const canShare = useMemo(() => canSharePng(), []);
+
+  const share = async () => {
+    if (!match || !svg) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const { width, height } = ART_FORMATS[format];
+      const blob = await svgToPng(svg, width, height);
+      const outcome = await sharePng(blob, artFilename(match, format), `Alpha7 x ${match.opponent}`);
+      if (outcome === 'shared') setMessage({ tone: 'success', text: 'Arte compartilhada.' });
+    } catch (error) {
+      setMessage({
+        tone: 'error',
+        text: `${error instanceof Error ? error.message : 'Não foi possível compartilhar.'} Use “Baixar PNG” e envie o arquivo pelo aplicativo que preferir.`,
+      });
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const download = async () => {
     if (!match || !svg) return;
@@ -242,8 +265,13 @@ export function ArtsPage() {
               </figcaption>
             </figure>
           )}
-          <div>
-            <Button variant="primary" icon="save" disabled={!svg || busy || photoState.loading} onClick={() => void download()}>
+          <div className={styles.exportActions}>
+            {canShare && (
+              <Button variant="primary" icon="share" disabled={!svg || busy || photoState.loading} onClick={() => void share()}>
+                {busy ? 'Gerando…' : photoState.loading ? 'Carregando fotos…' : 'Compartilhar'}
+              </Button>
+            )}
+            <Button variant={canShare ? 'secondary' : 'primary'} icon="save" disabled={!svg || busy || photoState.loading} onClick={() => void download()}>
               {busy ? 'Gerando…' : photoState.loading ? 'Carregando fotos…' : 'Baixar PNG'}
             </Button>
           </div>

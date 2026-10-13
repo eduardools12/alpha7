@@ -2,7 +2,7 @@
 
 Gestão de elenco, escalações e análise de desempenho para a equipe de voleibol Alpha7.
 
-**Versão 0.6.0.** Funciona: elenco (cartas, busca, filtros, cadastro, edição, perfil), avaliações com histórico e Overall por posição, pesos configuráveis, escalações (titulares, líbero, reservas, ordem de saque, prévia de rodízio), **treinos** (criar/editar/excluir, participantes, exercícios, registro rápido de tentativas por fundamento com desfazer, resumo pós-treino com estatísticas) e dashboard. Também: **partidas** (placar por set, saque e rotação, pontos e ações técnicas), **estatísticas consolidadas** de treinos e partidas e **gerador de artes** da escalação (só comissão técnica). Os dados ficam, por padrão, só neste navegador (sem sincronização com a nuvem; o backend Supabase é opcional) e a base inicial é uma **demonstração fictícia**, sempre identificada na interface.
+**Versão 0.7.0.** Funciona: elenco (cartas, busca, filtros, cadastro, edição, perfil), avaliações com histórico e Overall por posição, pesos configuráveis, escalações (titulares, líbero, reservas, ordem de saque, prévia de rodízio), **treinos** (criar/editar/excluir, participantes, exercícios, registro rápido de tentativas por fundamento com desfazer, resumo pós-treino com estatísticas) e dashboard. Também: **partidas** (placar por set, saque e rotação, pontos e ações técnicas), **estatísticas consolidadas** de treinos e partidas e **gerador de artes** da escalação (só comissão técnica). Os dados ficam, por padrão, só neste navegador (sem sincronização com a nuvem; o backend Supabase é opcional) e a base inicial é uma **demonstração fictícia**, sempre identificada na interface.
 
 **Antes de usar com dados reais:** os dados existem apenas neste navegador; limpar os dados do site apaga tudo. Em **Configurações → Backup** exporte um arquivo `alpha7-backup-….json` e guarde-o fora do navegador (o app lembra a cada 7 dias com dados alterados). A importação valida o arquivo, mostra uma prévia e só então substitui o workspace, guardando uma cópia automática para desfazer. Riscos, formato e limites: [`docs/DATA_SAFETY.md`](docs/DATA_SAFETY.md). Os critérios de registro e o limite de amostra dos treinos são decisões iniciais a validar com a comissão técnica (`docs/METRICS.md`).
 
@@ -31,5 +31,21 @@ npx vercel@latest deploy --prod --yes --scope eduardools12s-projects
 
   O build roda na Vercel (`npm run build`, que inclui a checagem de tipos). Não há publicação automática a cada commit (o repositório não está conectado ao GitHub).
 - **Depois de publicar um endereço novo**, ajuste no painel do Supabase (Authentication → URL Configuration) a *Site URL* e as *Redirect URLs*; ver `supabase/README.md`.
+
+## Aplicativo instalável
+
+O Alpha7 pode ser instalado no celular ou no computador e abre sem internet (Configurações, "Aplicativo no celular"). O que isso garante e o que não garante (dados na nuvem precisam de conexão), e como foi verificado: [`docs/PWA.md`](docs/PWA.md).
+
+## Repositório e testes automáticos
+
+O código ainda **não está em nenhum repositório remoto**: a única cópia é a deste computador (a Vercel recebe o build por linha de comando). O fluxo `.github/workflows/ci.yml` roda tipos, testes, build e os testes de navegador a cada envio, mas **só passa a funcionar depois que o repositório existir no GitHub** (ele nunca foi executado). Passos (crie o repositório **privado**, sem README e sem `.gitignore`):
+
+```bash
+git remote add origin https://github.com/SEU-USUARIO/alpha7.git
+git branch -M main
+git push -u origin main
+```
+
+Nada secreto está no repositório nem no histórico (a chave do Supabase no frontend é só a `publishable`, vive em `.env.local`, ignorado pelo Git). O endereço do projeto Supabase aparece em `supabase/README.md`; não é segredo, mas mantenha o repositório privado. Se o fluxo de testes falhar no GitHub, comece pelo job "Testes em navegador": ele usa o Chrome do próprio servidor do GitHub.
 
 Documentação em [`docs/`](docs/) e guia para desenvolvimento em [`CLAUDE.md`](CLAUDE.md).

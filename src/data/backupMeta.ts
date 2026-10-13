@@ -14,9 +14,14 @@ export interface LastBackup {
   filename: string;
 }
 
-export function readLastBackup(): LastBackup | null {
+/** Chave da marca de backup: a do navegador (`local`, a de sempre) ou uma por equipe na nuvem. Nunca se misturam. */
+export function lastBackupKey(scope: string): string {
+  return scope === 'local' ? KEY : `${KEY}.${scope}`;
+}
+
+export function readLastBackup(scope = 'local'): LastBackup | null {
   try {
-    const raw = globalThis.localStorage?.getItem(KEY);
+    const raw = globalThis.localStorage?.getItem(lastBackupKey(scope));
     if (!raw) return null;
     const data: unknown = JSON.parse(raw);
     if (
@@ -35,9 +40,9 @@ export function readLastBackup(): LastBackup | null {
   return null;
 }
 
-export function writeLastBackup(meta: LastBackup): void {
+export function writeLastBackup(meta: LastBackup, scope = 'local'): void {
   try {
-    globalThis.localStorage?.setItem(KEY, JSON.stringify(meta));
+    globalThis.localStorage?.setItem(lastBackupKey(scope), JSON.stringify(meta));
   } catch {
     /* sem espaço ou bloqueado: o backup já foi baixado, só perdemos o lembrete */
   }

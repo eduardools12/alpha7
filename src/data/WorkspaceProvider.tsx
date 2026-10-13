@@ -301,7 +301,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
   const [integrityProblems, setIntegrityProblems] = useState(0);
   const [data, setData] = useState<Workspace>(() => createEmptyWorkspace());
   const [snapshot, setSnapshot] = useState<SnapshotInfo | null>(null);
-  const [lastBackup, setLastBackup] = useState<LastBackup | null>(() => readLastBackup());
+  const [lastBackup, setLastBackup] = useState<LastBackup | null>(() => readLastBackup(gw.backupScope));
   // Estado mais recente para validar registros em toques rápidos, antes de o React re-renderizar.
   const latest = useRef(data);
   latest.current = data;
@@ -813,7 +813,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
         const result = createBackup(fresh, { appVersion: APP_VERSION });
         if (!result.ok) throw new BackupBlockedError(result.errors, result.totalErrors);
         const meta: LastBackup = { at: result.file.exportedAt, fingerprint: result.file.checksum.value, filename: result.filename };
-        writeLastBackup(meta);
+        writeLastBackup(meta, gw.backupScope);
         setLastBackup(meta);
         return { json: result.json, filename: result.filename, summary: result.summary };
       },

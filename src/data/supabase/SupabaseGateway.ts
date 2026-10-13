@@ -178,6 +178,7 @@ async function guard<T>(work: () => PromiseLike<T>): Promise<T> {
 export class SupabaseGateway implements DataGateway {
   readonly kind = 'remote' as const;
   readonly persistent = true;
+  readonly backupScope: string;
   private readonly client: RemoteClient;
   private readonly teamId: string;
   private readonly userId: string;
@@ -187,6 +188,7 @@ export class SupabaseGateway implements DataGateway {
     if (!options.userId) throw new Error('SupabaseGateway precisa de uma pessoa autenticada.');
     this.client = options.client;
     this.teamId = options.teamId;
+    this.backupScope = `remote.${options.teamId}`;
     this.userId = options.userId;
   }
 

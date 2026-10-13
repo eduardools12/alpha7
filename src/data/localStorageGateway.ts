@@ -295,6 +295,7 @@ function parseWorkspace(raw: string): Workspace {
  */
 export class LocalStorageGateway implements DataGateway {
   readonly kind = 'local' as const;
+  readonly backupScope = 'local';
   readonly persistent: boolean;
   private readonly storage: StorageLike | null;
   private memory: Workspace | null = null;

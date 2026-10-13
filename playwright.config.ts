@@ -19,10 +19,19 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   reporter: 'list',
   projects: [
-    { name: 'local', testIgnore: /auth\.spec\.ts/, use: { ...shared, baseURL: 'http://localhost:5174' } },
+    { name: 'local', testIgnore: /(auth|pwa)\.spec\.ts/, use: { ...shared, baseURL: 'http://localhost:5174' } },
     { name: 'remoto', testMatch: /auth\.spec\.ts/, use: { ...shared, baseURL: 'http://localhost:5175' } },
+    // Aplicativo instalável: precisa do BUILD de produção (o service worker não existe no servidor de desenvolvimento).
+    { name: 'pwa', testMatch: /pwa\.spec\.ts/, use: { ...shared, baseURL: 'http://localhost:5176', serviceWorkers: 'allow' } },
   ],
   webServer: [
+    {
+      command: 'npm run build && npx vite preview --port 5176 --strictPort',
+      url: 'http://localhost:5176',
+      reuseExistingServer: false,
+      timeout: 120_000,
+      env: { VITE_DATA_BACKEND: 'local' },
+    },
     {
       command: 'npm run dev -- --port 5174 --strictPort',
       url: 'http://localhost:5174',

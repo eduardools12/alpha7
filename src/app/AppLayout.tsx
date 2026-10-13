@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { Link, Outlet } from 'react-router-dom';
+import { Suspense, useEffect, useRef } from 'react';
+import { Link, Outlet, useMatch } from 'react-router-dom';
 import { Button } from '@/components/ui/Button';
 import { LoadingBlock } from '@/components/ui/EmptyState';
 import { Notice } from '@/components/ui/Notice';
@@ -8,6 +8,8 @@ import { hasRealData } from '@/data/backup';
 import { useBackupStatus } from '@/data/useBackupStatus';
 import { useWorkspace } from '@/data/WorkspaceProvider';
 import { FirstUseScreen, RecoveryScreen } from '@/features/startup/StartupScreens';
+import { useUpdateReady } from '@/pwa/hooks';
+import { applyUpdate } from '@/pwa/serviceWorker';
 import { MobileNav, MobileTopBar } from './MobileNav';
 import { Sidebar } from './Sidebar';
 import { PATHS } from './routes';
@@ -17,7 +19,7 @@ import styles from './AppLayout.module.css';
 const REMINDER_DAYS = 7;
 
 /** Lembrete de backup: só aparece quando existem dados da equipe e eles estão sem proteção recente. */
-function BackupReminder() {
+function BackupReminder({ remote }: { remote: boolean }) {
   const status = useBackupStatus({ onlyWithRealData: true });
   if (!status.hasRealData) return null;
   const never = status.lastBackup === null;
@@ -27,10 +29,37 @@ function BackupReminder() {
     <Notice compact tone="info" title="Faça um backup dos dados da equipe">
       <span className={styles.long}>
         {never
-          ? 'Os dados cadastrados ficam só neste navegador e ainda não há nenhum backup. '
+          ? remote
+            ? 'Os dados da equipe ficam no servidor e você ainda não exportou nenhuma cópia em arquivo. '
+            : 'Os dados cadastrados ficam só neste navegador e ainda não há nenhum backup. '
           : `O último backup foi há ${status.daysSinceBackup} dias e houve alterações desde então. `}
       </span>
       <Link to={`${PATHS.settings}#backup`}>Exportar backup</Link>
+    </Notice>
+  );
+}
+
+/**
+ * Versão nova do aplicativo instalada e esperando. Nunca recarrega sozinha e não aparece nas telas de registro
+ * (partida ao vivo, registro de treino): um aviso surgindo ali deslocaria os botões no meio de um toque.
+ */
+function UpdateNotice() {
+  const ready = useUpdateReady();
+  const live = useMatch('/partidas/:matchId/acompanhar') !== null;
+  const recording = useMatch('/treinos/:trainingId/registrar') !== null;
+  if (!ready || live || recording) return null;
+  return (
+    <Notice
+      compact
+      tone="info"
+      title="Há uma versão nova do Alpha7"
+      action={
+        <Button size="sm" onClick={applyUpdate}>
+          Atualizar agora
+        </Button>
+      }
+    >
+      <span className={styles.long}>A tela será recarregada. Se estiver no meio de um registro, termine antes. </span>
     </Notice>
   );
 }
@@ -69,7 +98,8 @@ function DemoBanner() {
           Seu papel permite consultar os dados da equipe, mas não alterá-los. Os botões de edição ficam desativados ou ocultos.
         </Notice>
       )}
-      {ready && backend === 'local' && <BackupReminder />}
+      <UpdateNotice />
+      {ready && <BackupReminder remote={backend === 'remote'} />}
       {!persistent && backend === 'local' && (
         <Notice compact tone="warning" title="Armazenamento do navegador indisponível">
           As alterações valem só até recarregar a página. Exporte um backup antes de fechar.
@@ -95,7 +125,12 @@ function WorkspaceGate() {
     );
   }
 
-  return <Outlet />;
+  // Telas carregadas sob demanda: o menu e os avisos continuam no lugar enquanto o pedaço da tela chega.
+  return (
+    <Suspense fallback={<LoadingBlock />}>
+      <Outlet />
+    </Suspense>
+  );
 }
 
 export function AppLayout() {

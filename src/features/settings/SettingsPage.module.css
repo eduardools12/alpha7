@@ -147,3 +147,12 @@
   flex-wrap: wrap;
   gap: var(--s-3);
 }
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding-left: var(--s-5);
+  list-style: decimal;
+  font-size: var(--fs-sm);
+}

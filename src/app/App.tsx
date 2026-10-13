@@ -1,26 +1,29 @@
-import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { RequireCapability } from '@/auth/AccessContext';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
-import { LineupEditorPage } from '@/features/lineup/LineupEditorPage';
-import { LineupListPage } from '@/features/lineup/LineupListPage';
-import { MatchDetailPage } from '@/features/matches/MatchDetailPage';
-import { MatchFormPage } from '@/features/matches/MatchFormPage';
-import { MatchLivePage } from '@/features/matches/MatchLivePage';
-import { MatchesListPage } from '@/features/matches/MatchesListPage';
 import { NotFoundPage } from '@/features/placeholders/NotFoundPage';
-import { EvaluationPage } from '@/features/roster/EvaluationPage';
-import { PlayerFormPage } from '@/features/roster/PlayerFormPage';
-import { PlayerProfilePage } from '@/features/roster/PlayerProfilePage';
 import { RosterPage } from '@/features/roster/RosterPage';
-import { SettingsPage } from '@/features/settings/SettingsPage';
-import { TrainingFormPage } from '@/features/trainings/TrainingFormPage';
-import { TrainingRecordPage } from '@/features/trainings/TrainingRecordPage';
-import { TrainingSummaryPage } from '@/features/trainings/TrainingSummaryPage';
-import { TrainingsListPage } from '@/features/trainings/TrainingsListPage';
-// O gerador carrega fontes e logo embutidos: só é baixado quando a comissão técnica abre a página.
-const StatsPage = lazy(() => import('@/features/stats/StatsPage').then((m) => ({ default: m.StatsPage })));
-const ArtsPage = lazy(() => import('@/features/arts/ArtsPage').then((m) => ({ default: m.ArtsPage })));
+import { lazyPage } from './lazyPage';
+
+// Dashboard e elenco abrem junto com o aplicativo. As demais telas são baixadas quando alguém as abre (e o service worker já
+// as guarda na instalação, então também abrem sem internet). O gerador de artes e as estatísticas carregam ainda mais coisa
+// (fontes e logo embutidos, gráficos).
+const LineupEditorPage = lazyPage(() => import('@/features/lineup/LineupEditorPage'), 'LineupEditorPage');
+const LineupListPage = lazyPage(() => import('@/features/lineup/LineupListPage'), 'LineupListPage');
+const MatchDetailPage = lazyPage(() => import('@/features/matches/MatchDetailPage'), 'MatchDetailPage');
+const MatchFormPage = lazyPage(() => import('@/features/matches/MatchFormPage'), 'MatchFormPage');
+const MatchLivePage = lazyPage(() => import('@/features/matches/MatchLivePage'), 'MatchLivePage');
+const MatchesListPage = lazyPage(() => import('@/features/matches/MatchesListPage'), 'MatchesListPage');
+const EvaluationPage = lazyPage(() => import('@/features/roster/EvaluationPage'), 'EvaluationPage');
+const PlayerFormPage = lazyPage(() => import('@/features/roster/PlayerFormPage'), 'PlayerFormPage');
+const PlayerProfilePage = lazyPage(() => import('@/features/roster/PlayerProfilePage'), 'PlayerProfilePage');
+const SettingsPage = lazyPage(() => import('@/features/settings/SettingsPage'), 'SettingsPage');
+const TrainingFormPage = lazyPage(() => import('@/features/trainings/TrainingFormPage'), 'TrainingFormPage');
+const TrainingRecordPage = lazyPage(() => import('@/features/trainings/TrainingRecordPage'), 'TrainingRecordPage');
+const TrainingSummaryPage = lazyPage(() => import('@/features/trainings/TrainingSummaryPage'), 'TrainingSummaryPage');
+const TrainingsListPage = lazyPage(() => import('@/features/trainings/TrainingsListPage'), 'TrainingsListPage');
+const StatsPage = lazyPage(() => import('@/features/stats/StatsPage'), 'StatsPage');
+const ArtsPage = lazyPage(() => import('@/features/arts/ArtsPage'), 'ArtsPage');
 
 import { AppLayout } from './AppLayout';
 import { BackendRoot } from './BackendRoot';
@@ -52,8 +55,8 @@ export function AppRoutes() {
           <Route path="partidas/:matchId" element={<MatchDetailPage />} />
           <Route path="partidas/:matchId/editar" element={<RequireCapability capability="matches:write"><MatchFormPage /></RequireCapability>} />
           <Route path="partidas/:matchId/acompanhar" element={<RequireCapability capability="matches:write"><MatchLivePage /></RequireCapability>} />
-          <Route path="estatisticas" element={<Suspense fallback={<p role="status">Carregando…</p>}><StatsPage /></Suspense>} />
-          <Route path="artes" element={<RequireCapability capability="arts:generate"><Suspense fallback={<p role="status">Carregando…</p>}><ArtsPage /></Suspense></RequireCapability>} />
+          <Route path="estatisticas" element={<StatsPage />} />
+          <Route path="artes" element={<RequireCapability capability="arts:generate"><ArtsPage /></RequireCapability>} />
           <Route path="configuracoes" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

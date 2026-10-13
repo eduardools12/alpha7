@@ -1,6 +1,14 @@
 import type { SVGProps } from 'react';
 
 const PATHS = {
+  share: (
+    <>
+      <circle cx="18" cy="5" r="2.5" />
+      <circle cx="6" cy="12" r="2.5" />
+      <circle cx="18" cy="19" r="2.5" />
+      <path d="M8.2 10.8l7.6-4.4M8.2 13.2l7.6 4.4" />
+    </>
+  ),
   dashboard: (
     <>
       <rect x="3" y="3" width="7" height="9" rx="1.5" />
