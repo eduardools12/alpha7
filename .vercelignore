@@ -1,0 +1,10 @@
+# Não precisam ir para a publicação (o build só usa o código-fonte e public/).
+# A barra no início ancora na raiz do projeto: "supabase" sem ela também excluiria src/data/supabase.
+/design
+/docs
+/e2e
+/supabase
+/test-results
+/playwright-report
+/.playwright-mcp
+/.claude

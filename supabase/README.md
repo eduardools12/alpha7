@@ -44,7 +44,7 @@ Uma pessoa pode pertencer a várias equipes (o modelo permite): com mais de uma,
 
 O link de redefinição só funciona depois de ajustes **manuais** (não versionáveis):
 
-1. **Authentication → URL Configuration:** definir a *Site URL* e incluir em *Redirect URLs* o endereço do app (`http://localhost:5173/**` em desenvolvimento, e o endereço de produção quando existir). O app envia `redirectTo = <origem do app>/`.
+1. **Authentication → URL Configuration:** definir a *Site URL* e incluir em *Redirect URLs* o endereço do app: `https://alpha7-liart.vercel.app` (produção, ver `README.md`, seção Publicação) e `https://alpha7-liart.vercel.app/**`, mais `http://localhost:5173/**` para desenvolvimento. O app envia `redirectTo = <origem do app>/`.
 2. **Authentication → Email:** conferir o remetente padrão (limite baixo de envios por hora) e, se necessário, configurar SMTP próprio.
 3. O app usa o fluxo **PKCE**: o link deve ser aberto **no mesmo navegador** em que foi pedido. Abrir em outro aparelho não funciona (peça de novo).
 4. Ao abrir o link, o app mostra "Escolher nova senha" (mínimo de 8 caracteres) antes de liberar o uso.
