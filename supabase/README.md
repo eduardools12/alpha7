@@ -138,6 +138,8 @@ Aplicadas no projeto com exatamente este SQL, nesta ordem; os nomes usam as vers
 
 **Testado à mão com conta real (pelo dono do projeto, 2026-10-13):** login, criar equipe (a conta virou coach), cadastrar atleta e ver que continua depois de recarregar, e recuperação de senha de ponta a ponta no site publicado (e-mail recebido, link aberto no mesmo navegador, nova senha salva). Não há teste automatizado disso: depende de conta real e do e-mail.
 
+**Também testado à mão com conta de coach real no site publicado (pelo dono do projeto, 2026-10-13), depois dos deploys da 0.5.0 e da 0.6.0:** cadastrar partida, registrar pontos, estatísticas, gerador de artes e fotos dos atletas (enviar, ver na carta, no perfil e na arte). Sem teste automatizado: depende de conta e do Storage reais.
+
 O que **não** foi testado: a latência e o limite de linhas reais do PostgREST (simulado em 1000), papéis `analyst` e `viewer` com contas reais (só com o simulador e com a RLS no SQL), e adicionar pessoas pelo formulário do app com uma segunda conta real.
 
 ## Ajustes manuais no painel do Supabase (não dá para versionar aqui)

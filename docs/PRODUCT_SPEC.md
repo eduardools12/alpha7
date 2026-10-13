@@ -141,4 +141,5 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 - [x] Acompanhamento ao vivo pelo celular (botões grandes, um toque por ponto, bloqueio de toque repetido, desfazer, últimos pontos, rotação em quadra); falha ao gravar nunca muda o placar.
 - [x] Estatísticas com denominadores, “Sem dados” ≠ 0, amostra pequena sinalizada, sem conclusões automáticas, separadas das notas 1 a 99.
 - [x] Gerador de artes só para a comissão técnica; PNG baixado de verdade, conferido em navegador (assinatura, 1080 x 1350 e 1080 x 1920, fundo roxo oficial).
+- [x] Conferido à mão em produção pelo dono (2026-10-13), com conta de coach: partidas, estatísticas e gerador de artes (0.5.0) e, depois, fotos dos atletas (0.6.0).
 - [ ] **Pendente:** substituições e líbero automático; corrigir o motivo de ponto antigo; exportar relatório; mudar a escalação de um set em andamento; validar com a equipe os limites e critérios da seção D de `METRICS.md`; testar papéis analyst/viewer com contas reais no site publicado.
