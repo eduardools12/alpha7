@@ -54,6 +54,10 @@ Nomes em caixa alta existem só na carta (convenção de carta esportiva, presen
 
 **Aviso** (`Notice`): `info`, `success`, `warning`, `error`, com ícone, barra lateral colorida e `role` adequado (`alert` para erro e atenção).
 
+**Confirmação de substituição** (`ReplaceConfirm`, Configurações): aviso `warning` com título em forma de pergunta, lista do **impacto**, linha "Hoje o workspace tem…", recomendação "Exportar backup agora" (botão), caixa "Entendi…" só quando há dados da equipe (sem ela o botão destrutivo fica desabilitado) e o botão de confirmação com o verbo da ação ("Confirmar: apagar todos os dados"). Sempre acompanhado de "Cancelar". Padrão para qualquer ação que apaga ou substitui dados.
+
+**Botões em telas estreitas:** abaixo de 40 rem os rótulos longos quebram em linhas (`white-space: normal`, `max-width: 100%`) em vez de estourar a tela (verificado a 360 px). `--accent-hover` (`#6b46b8`) é mais escuro que `--accent` para manter texto branco ≥ 4,5:1 também no hover.
+
 **Estados** (`EmptyState`, `LoadingBlock`): vazio explica o que falta e oferece a ação; carregando usa `role="status"`.
 
 **Etiquetas:** `StatusBadge` (Ativo, Lesionado, Transição) e `DemoTag` (tracejada, lilás) para qualquer registro de demonstração.

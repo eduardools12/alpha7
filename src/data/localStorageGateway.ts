@@ -6,11 +6,23 @@ import { PLAYER_STATUSES, UNIFORM_COLORS, type Evaluation, type Player } from '@
 import { isPosition, POSITIONS } from '@/domain/positions';
 import { TRAINING_STATUSES, type Training, type TrainingEvent, type TrainingExercise } from '@/domain/training';
 import { createDemoWorkspace } from './demo';
-import { IntegrityError, StorageCorruptedError, type DataGateway } from './gateway';
+import { summarizeWorkspace } from './backup';
+import { IntegrityError, StorageCorruptedError, type DataGateway, type SnapshotInfo, type StorageUsage } from './gateway';
 import type { ActivitySnapshot, Settings, Workspace } from './types';
 
 export const STORAGE_KEY = 'alpha7.workspace.v1';
 export const CORRUPT_BACKUP_KEY = 'alpha7.workspace.v1.corrupt';
+/** Cópia automática do conteúdo anterior à última substituição (restaurar demo, apagar tudo, importar). */
+export const SNAPSHOT_KEY = 'alpha7.workspace.v1.snapshot';
+
+/** Estimativa prudente do limite do localStorage por site (varia por navegador; costuma ser ~5 milhões de caracteres). */
+export const STORAGE_LIMIT_CHARS = 5_000_000;
+
+interface StoredSnapshot {
+  savedAt: string;
+  reason: string;
+  previousRaw: string;
+}
 /**
  * Versão do formato. Campos novos são ADITIVOS: dados salvos antes dos treinos (sem
  * trainings/exercises/trainingEvents) continuam válidos e abrem com essas listas vazias.
@@ -167,6 +179,7 @@ export class LocalStorageGateway implements DataGateway {
   readonly persistent: boolean;
   private readonly storage: StorageLike | null;
   private memory: Workspace | null = null;
+  private memorySnapshot: StoredSnapshot | null = null;
 
   constructor(
     storage: StorageLike | null = browserStorage(),
@@ -204,6 +217,9 @@ export class LocalStorageGateway implements DataGateway {
 
   async savePlayer(player: Player): Promise<void> {
     this.update((ws) => {
+      // Camisa única também aqui: outra aba pode ter cadastrado o mesmo número depois que esta tela carregou.
+      const holder = ws.players.find((p) => p.jerseyNumber === player.jerseyNumber && p.id !== player.id);
+      if (holder) throw new IntegrityError(`O número ${player.jerseyNumber} já está em uso por outro atleta.`);
       const exists = ws.players.some((p) => p.id === player.id);
       ws.players = exists ? ws.players.map((p) => (p.id === player.id ? player : p)) : [...ws.players, player];
     });
@@ -234,8 +250,104 @@ export class LocalStorageGateway implements DataGateway {
     });
   }
 
-  async replaceWorkspace(workspace: Workspace): Promise<void> {
+  async replaceWorkspace(workspace: Workspace, reason = 'substituição do workspace'): Promise<void> {
+    // 1) copia o que existe hoje; se não der, aborta SEM tocar nos dados atuais
+    const previousRaw = this.rawCurrent();
+    if (previousRaw !== null) this.saveSnapshot(previousRaw, reason);
+    // 2) uma única gravação troca tudo de uma vez (se falhar, o conteúdo anterior continua intacto)
     this.write(workspace);
+  }
+
+  async snapshotInfo(): Promise<SnapshotInfo | null> {
+    const snapshot = this.readSnapshot();
+    if (!snapshot) return null;
+    let summary: SnapshotInfo['summary'] = null;
+    try {
+      summary = summarizeWorkspace(parseWorkspace(snapshot.previousRaw));
+    } catch {
+      /* conteúdo guardado ilegível: informa só data e motivo */
+    }
+    return { savedAt: snapshot.savedAt, reason: snapshot.reason, summary };
+  }
+
+  async restoreSnapshot(): Promise<void> {
+    const snapshot = this.readSnapshot();
+    if (!snapshot) throw new IntegrityError('Não há cópia de segurança para restaurar.');
+    let restored: Workspace;
+    try {
+      restored = parseWorkspace(snapshot.previousRaw);
+    } catch {
+      throw new IntegrityError('A cópia de segurança guardada está ilegível e não pode ser restaurada.');
+    }
+    const currentRaw = this.rawCurrent();
+    if (currentRaw !== null) this.saveSnapshot(currentRaw, 'desfazer a última substituição');
+    if (this.storage) this.storage.setItem(STORAGE_KEY, snapshot.previousRaw);
+    else this.memory = restored;
+  }
+
+  async exportRaw(): Promise<string | null> {
+    return this.rawCurrent();
+  }
+
+  subscribe(listener: () => void): () => void {
+    if (!this.storage || typeof window === 'undefined') return () => {};
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY || event.key === null) listener();
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }
+
+  async usage(): Promise<StorageUsage | null> {
+    if (!this.storage) return null;
+    const size = (key: string) => {
+      const value = this.storage?.getItem(key);
+      return value == null ? 0 : key.length + value.length; // o navegador conta chave + valor
+    };
+    const workspaceChars = size(STORAGE_KEY);
+    const snapshotChars = size(SNAPSHOT_KEY);
+    return {
+      usedChars: workspaceChars + snapshotChars + size(CORRUPT_BACKUP_KEY),
+      limitChars: STORAGE_LIMIT_CHARS,
+      workspaceChars,
+      snapshotChars,
+    };
+  }
+
+  /** Texto bruto do workspace atual (ou, sem armazenamento, a serialização da memória). */
+  private rawCurrent(): string | null {
+    if (this.storage) return this.storage.getItem(STORAGE_KEY);
+    return this.memory ? JSON.stringify({ version: SCHEMA_VERSION, ...this.memory }) : null;
+  }
+
+  private saveSnapshot(previousRaw: string, reason: string): void {
+    const snapshot: StoredSnapshot = { savedAt: new Date().toISOString(), reason, previousRaw };
+    if (!this.storage) {
+      this.memorySnapshot = snapshot;
+      return;
+    }
+    try {
+      this.storage.setItem(SNAPSHOT_KEY, JSON.stringify(snapshot));
+    } catch {
+      throw new IntegrityError(
+        'Não foi possível criar a cópia de segurança antes de substituir os dados (o navegador está sem espaço?). Nada foi alterado. Exporte um backup e libere espaço antes de tentar de novo.',
+      );
+    }
+  }
+
+  private readSnapshot(): StoredSnapshot | null {
+    if (!this.storage) return this.memorySnapshot;
+    const raw = this.storage.getItem(SNAPSHOT_KEY);
+    if (raw === null) return null;
+    try {
+      const data: unknown = JSON.parse(raw);
+      if (isRecord(data) && isString(data.savedAt) && isString(data.reason) && isString(data.previousRaw)) {
+        return { savedAt: data.savedAt, reason: data.reason, previousRaw: data.previousRaw };
+      }
+    } catch {
+      /* cópia ilegível */
+    }
+    return null;
   }
 
   async saveTraining(training: Training, exercises: TrainingExercise[]): Promise<void> {
@@ -258,6 +370,10 @@ export class LocalStorageGateway implements DataGateway {
   }
 
   async deleteTraining(trainingId: string): Promise<void> {
+    // Apagar um treino leva junto exercícios e muitos registros: guarda a cópia de segurança antes.
+    const previousRaw = this.rawCurrent();
+    const target = this.current().trainings.find((t) => t.id === trainingId);
+    if (previousRaw !== null && target) this.saveSnapshot(previousRaw, `exclusão do treino "${target.name}"`);
     this.update((ws) => {
       ws.trainings = ws.trainings.filter((t) => t.id !== trainingId);
       ws.exercises = ws.exercises.filter((e) => e.trainingId !== trainingId);

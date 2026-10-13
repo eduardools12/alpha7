@@ -32,7 +32,18 @@ Integridade de treinos (aplicada no domínio **e** de novo no gateway, para que 
 - **Excluir o treino** apaga, de forma atômica, o treino, seus exercícios e todos os seus eventos (válidos e desfeitos), e só eles. A tela informa as contagens antes de confirmar.
 - Treino concluído não aceita novos registros até ser reaberto.
 
-Limitações: um só navegador, sem backup, sem multiusuário, sem fotos. **Os dados locais não estão sincronizados com a nuvem** e o limite do `localStorage` (cerca de 5 MB) restringe o volume de registros; cada gravação regrava o conjunto inteiro (adequado ao volume de uma equipe amadora, não ao backend definitivo).
+### Chaves do navegador e proteção dos dados (v0.3)
+
+| Chave `localStorage` | Conteúdo | Observação |
+|---|---|---|
+| `alpha7.workspace.v1` | O workspace (`version: 1`) | A única fonte de verdade |
+| `alpha7.workspace.v1.snapshot` | `{ savedAt, reason, previousRaw }`: texto exato do workspace **antes** da última substituição ou exclusão de treino | Uma só vaga. Alimenta "Desfazer última substituição" |
+| `alpha7.workspace.v1.corrupt` | Cópia do texto ilegível, guardada na primeira leitura que falha | Não é sobrescrita pela recuperação |
+| `alpha7.lastBackup.v1` | `{ at, fingerprint, filename }` do último backup exportado | Fica **fora** do workspace e **fora** do backup: é metadado da máquina, não dado da equipe |
+
+`DataGateway` ganhou `replaceWorkspace(workspace, reason)`, `snapshotInfo()`, `restoreSnapshot()`, `exportRaw()`, `subscribe()` e `usage()`. Regras: toda substituição do workspace inteiro guarda antes a cópia de segurança e **aborta sem alterar nada** se não conseguir guardá-la; a troca é uma única chamada `setItem` (tudo ou nada); `deleteTraining` também guarda a cópia. O formato do arquivo de backup e as regras de importação estão em [DATA_SAFETY.md](DATA_SAFETY.md).
+
+Limitações: um só navegador, sem multiusuário, sem fotos. **Os dados locais não estão sincronizados com a nuvem** e o limite do `localStorage` (cerca de 5 MB por site) restringe o volume de registros; cada gravação regrava o conjunto inteiro (adequado ao volume de uma equipe amadora, não ao backend definitivo). A proteção contra perda é o **backup em arquivo**: sem ele, limpar os dados do navegador apaga tudo.
 
 ## B. Proposta para Supabase/PostgreSQL (planejado)
 
@@ -205,7 +216,7 @@ create table rally_events (
 - Estatísticas lêem somente linhas com `voided_at is null` (visões `valid_training_actions`, `valid_rallies`).
 - Placar do set = contagem de rallies válidos por `winner_side`; validar fim de set contra `target_points` com diferença de 2 (configurável).
 - Chaves: somente `anon` (publicável) no frontend; `service_role` nunca.
-- Migração dos dados locais: exportar o JSON v1 e inserir em `players`, `evaluations`, `lineups*`; o contrato `DataGateway` isola a troca na aplicação.
+- Migração dos dados locais: usar o **arquivo de backup** (`alpha7-backup`, formato 1; ver DATA_SAFETY.md) como fonte, pois já é validado, tem vínculos conferidos e checksum; inserir em `players`, `evaluations`, `lineups*`, `trainings*`, `training_actions`. O contrato `DataGateway` isola a troca na aplicação. **Preservar os `id` do backup** como chaves (ou mapeá-los 1:1) para manter os vínculos e as `attemptKey` (idempotência).
 
 ### Diferenças entre A e B a decidir na implementação
 

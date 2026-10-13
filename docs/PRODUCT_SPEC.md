@@ -43,8 +43,9 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Treinos | Intensidade da sessão, presença separada da lista de participantes, plano de treino (carga, objetivos) | Planejado |
 | Partidas | Placar por set, saque e rotação, rallies com motivo do ponto, correções com histórico | Planejado |
 | Estatísticas | Taxas de ace, ataque, side-out, bloqueio; recepção A/B/C/erro; comparação de atacantes; exportar relatório | Planejado |
-| Dados | Persistência em localStorage, restaurar demonstração, apagar tudo | Feito (provisório) |
-| Dados | Supabase (Postgres, autenticação, imagens), multiusuário, backup | Planejado |
+| Dados | Persistência em localStorage, restaurar demonstração, apagar tudo (com painel de impacto, confirmação e desfazer) | Feito (provisório) |
+| Dados | Backup em arquivo JSON com versão de formato e checksum; importação segura com prévia e confirmação; cópia automática antes de substituir; verificar integridade; lembrete de backup | Feito (v0.3). Ver `DATA_SAFETY.md` |
+| Dados | Supabase (Postgres, autenticação, imagens), multiusuário, sincronização | Planejado |
 
 ### Limitações conhecidas da escalação (Parcial)
 
@@ -57,6 +58,8 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 **Primeira entrega (v0.1, concluída):** elenco, avaliações, Overall, escalações, dashboard.
 
 **Módulo de Treinos (v0.2, concluído):** tudo marcado "Feito (v0.2)" acima. Persistência continua em `localStorage` (sem Supabase, sem sincronização).
+
+**Proteção dos dados (v0.3, concluída):** auditoria da persistência (`DATA_SAFETY.md`), backup e restauração seguros, cópia automática com desfazer, proteção do "Restaurar demonstração". Sem funcionalidade nova de esporte e sem Supabase.
 
 **Fora do escopo até aqui:** backend, autenticação, upload de fotos, partidas, estatísticas consolidadas por período, gerador de artes, exportação de relatórios, notificações.
 
@@ -98,6 +101,17 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 - [x] Critérios de cada resultado visíveis na tela de registro.
 - [x] Usável no celular: painel de resultado fixo ao alcance do polegar, alvos de 44px, sem rolagem horizontal da página.
 - [x] Registrar tentativas não altera notas técnicas nem Overall.
+
+### Proteção dos dados (v0.3: verificados por testes automatizados, inclusive em navegador real)
+
+- [x] Exportar backup é ação explícita; o arquivo tem nome com data e hora, identificador e versão de formato, e contém o workspace inteiro (atletas, avaliações, escalações, configurações, treinos, exercícios, registros) sem segredos.
+- [x] Ida e volta exporta/importa preserva avaliações e histórico, vínculos treino ↔ exercício ↔ atleta ↔ registro e registros desfeitos.
+- [x] Arquivo inválido, de outro formato, de versão futura, truncado ou adulterado é recusado e **não altera nada**.
+- [x] Importar mostra prévia (backup × atual), avisa que substitui tudo e exige confirmação; cancelar não altera nada.
+- [x] Falha durante a restauração (sem espaço, erro de gravação) não deixa dados pela metade.
+- [x] "Restaurar demonstração" e "Apagar todos os dados" descrevem o impacto, recomendam backup e exigem confirmação; o conteúdo anterior fica guardado para desfazer.
+- [x] Funcionalidades anteriores seguem funcionando (suíte completa).
+- [ ] **Aberto:** a proteção contra perda do aparelho/navegador depende de a pessoa guardar o arquivo (ver riscos em `DATA_SAFETY.md`).
 
 ### Módulos futuros (resumo; detalhar antes de implementar)
 

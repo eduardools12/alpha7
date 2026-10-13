@@ -1,6 +1,6 @@
 import { createDemoWorkspace, createEmptyWorkspace } from './demo';
 import { IntegrityError, StorageCorruptedError } from './gateway';
-import { CORRUPT_BACKUP_KEY, LocalStorageGateway, STORAGE_KEY } from './localStorageGateway';
+import { CORRUPT_BACKUP_KEY, LocalStorageGateway, SNAPSHOT_KEY, STORAGE_KEY } from './localStorageGateway';
 import { createUniformAttributes } from '@/domain/attributes';
 import { createEmptyLineup } from '@/domain/lineup';
 import { DEFAULT_OVERALL_WEIGHTS } from '@/domain/overall';
@@ -273,6 +273,22 @@ describe('LocalStorageGateway: treinos, exercícios e eventos', () => {
       await gateway.load();
       await expect(gateway.deleteTraining('nada')).resolves.toBeUndefined();
     });
+
+    it('guarda antes uma cópia de segurança com o treino e seus registros (dá para desfazer)', async () => {
+      const { gateway } = fresh();
+      await gateway.load();
+      await gateway.saveTraining(training, [ex]);
+      await gateway.addTrainingEvent(event());
+
+      await gateway.deleteTraining('tr');
+      expect((await gateway.snapshotInfo())?.reason).toContain(training.name);
+      expect((await gateway.load()).trainings.map((t) => t.id)).not.toContain('tr');
+
+      await gateway.restoreSnapshot();
+      const ws = await gateway.load();
+      expect(ws.trainings.map((t) => t.id)).toContain('tr');
+      expect(ws.trainingEvents.map((e) => e.id)).toEqual(['ev-1']);
+    });
   });
 
   describe('compatibilidade e corrupção', () => {
@@ -325,6 +341,177 @@ describe('LocalStorageGateway: treinos, exercícios e eventos', () => {
     await gateway.saveTraining(training, [ex]);
     await gateway.addTrainingEvent(event());
     expect((await gateway.load()).trainingEvents).toHaveLength(1);
+  });
+});
+
+describe('LocalStorageGateway: substituição segura do workspace', () => {
+  function setup() {
+    const storage = createMemoryStorage();
+    const gateway = new LocalStorageGateway(storage, () => createDemoWorkspace(NOW));
+    return { storage, gateway };
+  }
+  const rawOf = (storage: ReturnType<typeof createMemoryStorage>) => storage.getItem(STORAGE_KEY);
+
+  it('guarda uma cópia de segurança do conteúdo anterior antes de substituir', async () => {
+    const { storage, gateway } = setup();
+    await gateway.load();
+    const before = rawOf(storage);
+    await gateway.replaceWorkspace(createEmptyWorkspace(), 'exclusão de todos os dados');
+
+    expect(await gateway.load()).toMatchObject({ players: [], trainings: [] });
+    const info = await gateway.snapshotInfo();
+    expect(info).toMatchObject({ reason: 'exclusão de todos os dados' });
+    expect(info?.summary).toMatchObject({ players: 18, trainings: 4 });
+    // a cópia guarda o texto anterior, byte a byte
+    const stored = JSON.parse(storage.getItem(SNAPSHOT_KEY) ?? '{}') as { previousRaw: string };
+    expect(stored.previousRaw).toBe(before);
+  });
+
+  it('antes da primeira substituição não há cópia de segurança', async () => {
+    const { gateway } = setup();
+    await gateway.load();
+    expect(await gateway.snapshotInfo()).toBeNull();
+  });
+
+  it('desfazer devolve exatamente o conteúdo anterior e guarda o atual (dá para ir e voltar)', async () => {
+    const { storage, gateway } = setup();
+    await gateway.load();
+    const original = rawOf(storage);
+    await gateway.replaceWorkspace(createEmptyWorkspace(), 'apagar');
+    const empty = rawOf(storage);
+
+    await gateway.restoreSnapshot();
+    expect(rawOf(storage)).toBe(original);
+    expect((await gateway.snapshotInfo())?.reason).toBe('desfazer a última substituição');
+
+    await gateway.restoreSnapshot(); // volta ao vazio
+    expect(rawOf(storage)).toBe(empty);
+  });
+
+  it('só a última substituição fica guardada', async () => {
+    const { gateway } = setup();
+    await gateway.load();
+    await gateway.replaceWorkspace(createEmptyWorkspace(), 'primeira');
+    await gateway.replaceWorkspace(createDemoWorkspace(NOW), 'segunda');
+    const info = await gateway.snapshotInfo();
+    expect(info?.reason).toBe('segunda');
+    expect(info?.summary?.players).toBe(0); // o conteúdo anterior à segunda era o vazio
+  });
+
+  it('sem espaço para a cópia de segurança, ABORTA e os dados atuais ficam intactos', async () => {
+    const { storage, gateway } = setup();
+    await gateway.load();
+    const before = rawOf(storage);
+    const realSet = storage.setItem;
+    storage.setItem = (key: string, value: string) => {
+      if (key === SNAPSHOT_KEY) throw new Error('QuotaExceededError');
+      realSet(key, value);
+    };
+    await expect(gateway.replaceWorkspace(createEmptyWorkspace(), 'apagar')).rejects.toBeInstanceOf(IntegrityError);
+    await expect(gateway.replaceWorkspace(createEmptyWorkspace(), 'apagar')).rejects.toThrow(/Nada foi alterado/);
+    expect(rawOf(storage)).toBe(before);
+    expect((await gateway.load()).players).toHaveLength(18);
+  });
+
+  it('se a gravação do novo conteúdo falhar, o conteúdo anterior continua intacto (nunca pela metade)', async () => {
+    const { storage, gateway } = setup();
+    await gateway.load();
+    const before = rawOf(storage);
+    const realSet = storage.setItem;
+    storage.setItem = (key: string, value: string) => {
+      if (key === STORAGE_KEY) throw new Error('QuotaExceededError');
+      realSet(key, value);
+    };
+    await expect(gateway.replaceWorkspace(createEmptyWorkspace(), 'apagar')).rejects.toThrow();
+    storage.setItem = realSet;
+    expect(rawOf(storage)).toBe(before);
+    expect((await gateway.load()).players).toHaveLength(18);
+  });
+
+  it('desfazer sem cópia de segurança é recusado com mensagem clara', async () => {
+    const { gateway } = setup();
+    await gateway.load();
+    await expect(gateway.restoreSnapshot()).rejects.toThrow(/Não há cópia de segurança/);
+  });
+
+  it('cópia de segurança ilegível não é restaurada e não estraga os dados atuais', async () => {
+    const { storage, gateway } = setup();
+    await gateway.load();
+    const before = rawOf(storage);
+    storage.setItem(SNAPSHOT_KEY, JSON.stringify({ savedAt: 'x', reason: 'y', previousRaw: '{quebrado' }));
+    await expect(gateway.restoreSnapshot()).rejects.toThrow(/ilegível/);
+    expect(rawOf(storage)).toBe(before);
+    expect((await gateway.snapshotInfo())?.summary).toBeNull();
+  });
+
+  it('snapshot corrompido no armazenamento é ignorado (null)', async () => {
+    const { storage, gateway } = setup();
+    await gateway.load();
+    storage.setItem(SNAPSHOT_KEY, 'não é json');
+    expect(await gateway.snapshotInfo()).toBeNull();
+  });
+
+  it('exportRaw devolve o texto salvo, mesmo ilegível', async () => {
+    const storage = createMemoryStorage();
+    storage.setItem(STORAGE_KEY, '{dados quebrados');
+    const gateway = new LocalStorageGateway(storage);
+    expect(await gateway.exportRaw()).toBe('{dados quebrados');
+    await expect(gateway.load()).rejects.toBeInstanceOf(StorageCorruptedError);
+    // a substituição de um workspace ilegível também preserva o texto antigo na cópia de segurança
+    await gateway.replaceWorkspace(createEmptyWorkspace(), 'recomeçar');
+    const snapshot = JSON.parse(storage.getItem(SNAPSHOT_KEY) ?? '{}') as { previousRaw: string };
+    expect(snapshot.previousRaw).toBe('{dados quebrados');
+  });
+
+  it('sem armazenamento do navegador, a substituição e o desfazer funcionam em memória', async () => {
+    const gateway = new LocalStorageGateway(null, () => createDemoWorkspace(NOW));
+    await gateway.load();
+    await gateway.replaceWorkspace(createEmptyWorkspace(), 'apagar');
+    expect((await gateway.load()).players).toEqual([]);
+    expect((await gateway.snapshotInfo())?.summary?.players).toBe(18);
+    await gateway.restoreSnapshot();
+    expect((await gateway.load()).players).toHaveLength(18);
+  });
+
+  it('usage mede workspace e cópia de segurança; sem armazenamento devolve null', async () => {
+    const { gateway } = setup();
+    await gateway.load();
+    const before = await gateway.usage();
+    expect(before?.workspaceChars).toBeGreaterThan(1000);
+    expect(before?.snapshotChars).toBe(0);
+    expect(before?.usedChars).toBeLessThan(before?.limitChars ?? 0);
+
+    await gateway.replaceWorkspace(createEmptyWorkspace(), 'apagar');
+    const after = await gateway.usage();
+    expect(after?.snapshotChars).toBeGreaterThan(before?.workspaceChars ?? 0); // a cópia contém o workspace antigo
+    expect(after?.usedChars).toBeGreaterThanOrEqual((after?.workspaceChars ?? 0) + (after?.snapshotChars ?? 0));
+
+    expect(await new LocalStorageGateway(null).usage()).toBeNull();
+  });
+
+  it('savePlayer recusa camisa já usada por outro atleta, mesmo se a tela estava desatualizada', async () => {
+    const { storage, gateway } = setup();
+    const ws = await gateway.load();
+    const holder = ws.players[0];
+    if (!holder) throw new Error('demo sem atletas');
+    const before = rawOf(storage);
+    await expect(gateway.savePlayer(makePlayer({ id: 'novo', jerseyNumber: holder.jerseyNumber }))).rejects.toBeInstanceOf(IntegrityError);
+    expect(rawOf(storage)).toBe(before);
+    // o próprio atleta pode ser salvo com a camisa que já tem
+    await expect(gateway.savePlayer({ ...holder, name: 'Nome novo' })).resolves.toBeUndefined();
+  });
+
+  it('subscribe avisa quando OUTRA aba altera os dados (evento storage) e pode ser cancelado', async () => {
+    const storage = createMemoryStorage();
+    const gateway = new LocalStorageGateway(storage, () => createDemoWorkspace(NOW));
+    const listener = vi.fn();
+    const stop = gateway.subscribe(listener);
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
+    window.dispatchEvent(new StorageEvent('storage', { key: 'outra-chave' }));
+    expect(listener).toHaveBeenCalledTimes(1);
+    stop();
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
+    expect(listener).toHaveBeenCalledTimes(1);
   });
 });
 

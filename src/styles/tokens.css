@@ -57,7 +57,7 @@
 
   /* Ação */
   --accent: var(--a7-violet-500);
-  --accent-hover: var(--a7-violet-400);
+  --accent-hover: #6b46b8; /* mais escuro que o normal: texto branco ≥ 4,5:1 também no hover (verificado com axe) */
   --focus: #d3c4f5;
 
   /* Tipografia */

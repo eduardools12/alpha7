@@ -14,8 +14,11 @@ import type { Lineup } from '@/domain/lineup';
 import type { OverallWeights } from '@/domain/overall';
 import type { Evaluation, Player, PlayerDraft } from '@/domain/player';
 import type { Attributes } from '@/domain/attributes';
+import { APP_VERSION } from '@/version';
+import { createBackup, validateWorkspace, type WorkspaceSummary, type WorkspaceValidation } from './backup';
+import { readLastBackup, writeLastBackup, type LastBackup } from './backupMeta';
 import { createDemoWorkspace, createEmptyWorkspace } from './demo';
-import { IntegrityError, StorageCorruptedError, type DataGateway } from './gateway';
+import { IntegrityError, StorageCorruptedError, type DataGateway, type SnapshotInfo, type StorageUsage } from './gateway';
 import { LocalStorageGateway } from './localStorageGateway';
 import type { Workspace } from './types';
 
@@ -35,9 +38,27 @@ export interface WorkspaceActions {
   saveLineup(lineup: Lineup): Promise<Lineup>;
   deleteLineup(id: string): Promise<void>;
   saveWeights(weights: OverallWeights): Promise<void>;
+  /**
+   * Substitui TODO o workspace pela demonstração (mantém os pesos do Overall). A interface deve pedir
+   * confirmação explícita antes: o conteúdo anterior vai para a cópia de segurança (desfazer).
+   */
   restoreDemo(): Promise<void>;
+  /** Apaga atletas, avaliações, escalações e treinos (mantém os pesos do Overall). Com cópia de segurança. */
   clearAllData(): Promise<void>;
   reload(): Promise<void>;
+
+  /** Gera o backup do workspace INTEIRO (lido do armazenamento, não da tela) e registra o lembrete. */
+  exportBackup(): Promise<ExportedBackup>;
+  /** Troca o workspace por um já validado (importação). Com cópia de segurança; ou tudo ou nada. */
+  restoreWorkspace(workspace: Workspace, reason: string): Promise<void>;
+  /** Volta ao conteúdo anterior à última substituição. */
+  undoLastReplacement(): Promise<void>;
+  /** Texto bruto salvo, mesmo ilegível, para baixar uma cópia de emergência. */
+  readRawData(): Promise<string | null>;
+  /** Audita o workspace salvo agora com a mesma validação estrita da importação. */
+  checkIntegrity(): Promise<WorkspaceValidation>;
+  /** Quanto do armazenamento do navegador está em uso (null se só em memória). */
+  usage(): Promise<StorageUsage | null>;
 
   /** Cria (trainingId null) ou edita um treino e seus exercícios. Nunca apaga registros. */
   saveTraining(trainingId: string | null, draft: TrainingDraft): Promise<Training>;
@@ -59,8 +80,29 @@ export interface RecordTrainingInput {
   attemptKey: string;
 }
 
+export interface ExportedBackup {
+  json: string;
+  filename: string;
+  summary: WorkspaceSummary;
+}
+
+/** O backup não pôde ser gerado porque os dados não passaram na validação (mostra os problemas). */
+export class BackupBlockedError extends Error {
+  constructor(
+    readonly problems: string[],
+    readonly totalProblems: number,
+  ) {
+    super('Os dados atuais têm inconsistências e o backup não foi gerado.');
+    this.name = 'BackupBlockedError';
+  }
+}
+
 export interface WorkspaceValue {
   status: WorkspaceStatus;
+  /** Cópia de segurança da última substituição (restaurar demo, apagar tudo, importar), ou null. */
+  snapshot: SnapshotInfo | null;
+  /** Último backup exportado neste navegador (lembrete; fora do workspace). */
+  lastBackup: LastBackup | null;
   /** Mensagem amigável quando status === 'error'. */
   error: string | null;
   corrupted: boolean;
@@ -95,9 +137,19 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
   const [error, setError] = useState<string | null>(null);
   const [corrupted, setCorrupted] = useState(false);
   const [data, setData] = useState<Workspace>(() => createEmptyWorkspace());
+  const [snapshot, setSnapshot] = useState<SnapshotInfo | null>(null);
+  const [lastBackup, setLastBackup] = useState<LastBackup | null>(() => readLastBackup());
   // Estado mais recente para validar registros em toques rápidos, antes de o React re-renderizar.
   const latest = useRef(data);
   latest.current = data;
+
+  const refreshSnapshot = useCallback(async () => {
+    try {
+      setSnapshot(await gw.snapshotInfo());
+    } catch {
+      setSnapshot(null);
+    }
+  }, [gw]);
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -112,19 +164,47 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
       setError(isCorrupt ? cause.message : 'Não foi possível abrir os dados salvos.');
       setStatus('error');
     }
-  }, [gw]);
+    void refreshSnapshot();
+  }, [gw, refreshSnapshot]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  // Outra aba mudou os dados: recarrega em silêncio (sem piscar a tela de carregamento) para não
+  // trabalhar em cima de uma cópia velha, que depois poderia sobrescrever o que a outra aba fez.
+  useEffect(
+    () =>
+      gw.subscribe(() => {
+        gw.load()
+          .then((fresh) => {
+            setData(fresh);
+            setError(null);
+            setCorrupted(false);
+            setStatus('ready');
+            void refreshSnapshot();
+          })
+          .catch(() => {
+            /* se o dado ficou ilegível, o próximo carregamento mostra o aviso */
+          });
+      }),
+    [gw, refreshSnapshot],
+  );
+
+  // Pede ao navegador que não apague os dados sozinho quando faltar espaço. Pode ser negado: tudo bem.
+  useEffect(() => {
+    if (status === 'ready' && gw.persistent) void navigator.storage?.persist?.().catch(() => undefined);
+  }, [status, gw]);
+
   const actions = useMemo<WorkspaceActions>(() => {
-    const replace = async (next: Workspace) => {
-      await guarded(() => gw.replaceWorkspace(next));
+    /** Troca o workspace inteiro. A cópia de segurança é feita pelo gateway antes de gravar. */
+    const replace = async (next: Workspace, reason: string) => {
+      await guarded(() => gw.replaceWorkspace(next, reason));
       setData(next);
       setError(null);
       setCorrupted(false);
       setStatus('ready');
+      await refreshSnapshot();
     };
 
     return {
@@ -251,6 +331,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
             exercises: prev.exercises.filter((e) => e.trainingId !== trainingId),
             trainingEvents: prev.trainingEvents.filter((e) => e.trainingId !== trainingId),
           }));
+          await refreshSnapshot(); // a exclusão guardou uma cópia de segurança
         });
       },
 
@@ -313,15 +394,56 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
         });
       },
 
-      restoreDemo: () => replace(createDemoWorkspace()),
-      clearAllData: () => replace({ ...createEmptyWorkspace(), settings: data.settings }),
+      // Mantém os pesos do Overall: são configuração da equipe, não dados de demonstração.
+      restoreDemo: () => replace({ ...createDemoWorkspace(), settings: latest.current.settings }, 'restauração da demonstração'),
+      clearAllData: () =>
+        replace({ ...createEmptyWorkspace(), settings: latest.current.settings }, 'exclusão de todos os dados'),
       reload: load,
+
+      async exportBackup() {
+        // Lê do armazenamento (não do que está na tela): pega o workspace inteiro, inclusive o que outra aba salvou.
+        let fresh: Workspace;
+        try {
+          fresh = await gw.load();
+        } catch (cause) {
+          if (cause instanceof StorageCorruptedError) {
+            throw new DomainRuleError('Os dados salvos estão ilegíveis e não dá para gerar um backup estruturado. Baixe a cópia bruta dos dados.');
+          }
+          throw new DomainRuleError('Não foi possível ler os dados para gerar o backup.');
+        }
+        const result = createBackup(fresh, { appVersion: APP_VERSION });
+        if (!result.ok) throw new BackupBlockedError(result.errors, result.totalErrors);
+        const meta: LastBackup = { at: result.file.exportedAt, fingerprint: result.file.checksum.value, filename: result.filename };
+        writeLastBackup(meta);
+        setLastBackup(meta);
+        return { json: result.json, filename: result.filename, summary: result.summary };
+      },
+
+      restoreWorkspace: (workspace, reason) => replace(workspace, reason),
+
+      async undoLastReplacement() {
+        await guarded(() => gw.restoreSnapshot());
+        setData(await gw.load());
+        setError(null);
+        setCorrupted(false);
+        setStatus('ready');
+        await refreshSnapshot();
+      },
+
+      readRawData: () => gw.exportRaw(),
+
+      usage: () => gw.usage(),
+
+      async checkIntegrity() {
+        const fresh = await gw.load();
+        return validateWorkspace(JSON.parse(JSON.stringify(fresh)) as unknown);
+      },
     };
   }, [gw, data, load]);
 
   const value = useMemo<WorkspaceValue>(
-    () => ({ status, error, corrupted, persistent: gw.persistent, data, actions }),
-    [status, error, corrupted, gw, data, actions],
+    () => ({ status, snapshot, lastBackup, error, corrupted, persistent: gw.persistent, data, actions }),
+    [status, snapshot, lastBackup, error, corrupted, gw, data, actions],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

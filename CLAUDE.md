@@ -1,6 +1,6 @@
 # Alpha7 Volleyball Performance
 
-Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.2** (v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos).
+Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.3** (v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos; v0.3 = proteção dos dados: backup, importação segura, cópia automática). A versão vive em `src/version.ts` e deve ser igual à do `package.json` (há teste).
 
 ## Estado atual (não declare como pronto o que está só planejado)
 
@@ -15,7 +15,8 @@ Aplicação web de gestão esportiva e análise de desempenho para uma equipe am
 | Perfil do atleta: métricas observadas (de treinos) | Implementado; as de partida seguem indisponíveis |
 | Partidas, Estatísticas consolidadas | **Não implementadas**: telas honestas de "em desenvolvimento" |
 | Gerador de artes (pôster da escalação) | **Não implementado**: botão desativado |
-| Backend (Supabase), autenticação, upload de fotos | **Não implementados**: persistência em `localStorage` |
+| Proteção dos dados (v0.3): exportar/importar backup JSON validado, cópia automática com desfazer, confirmação reforçada, verificar integridade, lembrete, recuperação de dado ilegível | Implementado. Auditoria e riscos: `docs/DATA_SAFETY.md` |
+| Backend (Supabase), autenticação, upload de fotos | **Não implementados**: persistência em `localStorage` (um navegador, sem nuvem; o backup em arquivo é a proteção) |
 
 ## Stack
 
@@ -86,6 +87,12 @@ Regra de dependência: `domain` não importa nada de fora de `domain`. `data` im
 - Não existem segredos no repositório. Quando o Supabase for integrado: só a chave **anon/publicável** no frontend, via `VITE_*` em `.env.local` (ignorado pelo Git; modelo em `.env.example`). Chave `service_role` nunca vai ao frontend.
 - Proteção real dos dados virá de RLS no Postgres (escopo por equipe), não de lógica no cliente.
 - Dados do `localStorage` são tratados como não confiáveis: o gateway valida o formato e recusa dados corrompidos (guarda cópia de recuperação).
+- **Proteção de dados (detalhes em `docs/DATA_SAFETY.md`):**
+  - Toda substituição do workspace inteiro passa por `replaceWorkspace`, que guarda ANTES a cópia de segurança e aborta sem alterar nada se não conseguir. Nunca escreva em `alpha7.workspace.v1` por outro caminho.
+  - Nunca descarte dados do usuário em silêncio: ação destrutiva = painel de impacto + recomendação de backup + confirmação explícita + desfazer.
+  - Importação nunca mescla nem aplica JSON bruto: `parseBackup` reconstrói cada objeto só com campos conhecidos e rejeita o arquivo inteiro se algo falhar. O checksum detecta corrupção, não adulteração.
+  - Mudou o formato dos dados? Aditivo e opcional não exige nova versão; qualquer outra mudança exige nova versão de esquema/formato **e** migração em `MIGRATIONS` com teste usando arquivo v1 fixo. Atualize `src/version.ts` junto com `package.json`.
+  - Toda nova coleção persistida entra em `Workspace`, no backup (`workspaceBody`), em `validateWorkspace`, em `summarizeWorkspace` e nos testes de ida e volta.
 - Texto digitado é renderizado pelo React (escapado); nunca use `dangerouslySetInnerHTML`.
 - Não adicione dependências sem justificar (o que resolve, por que não dá para fazer sem).
 
@@ -104,3 +111,4 @@ Logo e uniformes oficiais: use os arquivos originais. `public/brand/original/` g
 - Responsivo de 360px a 1920px, sem rolagem horizontal (o `e2e/responsive.spec.ts` verifica; inclua a nova rota em `ROUTES`).
 - Tipos, testes e build passam; documentação (`docs/`) atualizada sem declarar como implementado o que é plano.
 - Troca de persistência: implemente `DataGateway` (`src/data/gateway.ts`); telas e domínio não mudam.
+- Ação que apaga ou substitui dados: nunca silenciosa; siga a regra de proteção de dados acima e teste cancelar, falha no meio e desfazer.

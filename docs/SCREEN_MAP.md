@@ -31,7 +31,7 @@ As referências são especificação, não assets. Diferenças deliberadas: `DES
   /treinos/:id          Resumo pós-treino ── /treinos/:id/editar
                                             └ /treinos/:id/registrar (registro rápido)
 /partidas  /estatisticas   Em desenvolvimento
-/configuracoes          Pesos do Overall, identidade, dados (#dados)
+/configuracoes          Backup (#backup), dados e armazenamento (#dados), pesos do Overall, identidade
 ```
 
 Menu lateral (≥ 960px) e barra inferior (< 960px; "Mais" abre Partidas, Estatísticas e Configurações).
@@ -99,4 +99,13 @@ Objetivo: conduzir o placar de uma partida. Previstos: placar do set com saque e
 
 ## Telas não presentes nas referências
 
-`/configuracoes` (pesos do Overall, identidade da equipe com logo e uniformes oficiais, gerenciar dados), `/escalacoes` (lista), cadastro/edição/avaliação de atleta e a página de não encontrado. Seguem os mesmos padrões do sistema de design.
+`/configuracoes` (ver abaixo), `/escalacoes` (lista), cadastro/edição/avaliação de atleta e a página de não encontrado. Seguem os mesmos padrões do sistema de design.
+
+### `/configuracoes` (v0.3), de cima para baixo
+
+1. **Backup** (`#backup`): "Exportar backup" (baixa `alpha7-backup-AAAA-MM-DD-HHmm.json`; mostra sucesso ou o motivo da recusa, com opção de baixar a cópia bruta) e "Arquivo de backup (.json)" para restaurar. Arquivo recusado: lista de problemas e "Nada foi alterado". Arquivo válido: **prévia** Backup × Atual, aviso de que restaurar substitui tudo, "Exportar backup do workspace atual", caixa "Entendi…" (só quando há dados da equipe), "Restaurar este backup" e "Cancelar".
+2. **Dados e armazenamento** (`#dados`): onde os dados ficam, resumo do que há (com a parte de demonstração), proteção e uso do armazenamento (aviso a 70%), "Verificar integridade dos dados", cópia de segurança da última substituição com "Desfazer última substituição", e "Restaurar dados de demonstração" / "Apagar todos os dados" com painel de impacto e confirmação.
+3. Pesos do Overall.
+4. Identidade da equipe (logo e uniformes oficiais).
+
+Em todas as telas: faixa **"Faça um backup dos dados da equipe"** (com link para `#backup`) quando há dados reais sem backup recente; a faixa de demonstração também avisa quando o armazenamento do navegador está indisponível; se os dados salvos estiverem ilegíveis, a tela de recuperação explica que nada foi apagado, permite baixar o texto ilegível e só então recomeçar.

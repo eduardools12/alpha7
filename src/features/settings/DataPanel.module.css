@@ -1,0 +1,33 @@
+.muted {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-wrap: pretty;
+}
+
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding-top: var(--s-4);
+  border-top: 1px solid var(--line);
+}
+
+.heading {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin-top: var(--s-2);
+  padding-left: var(--s-4);
+  list-style: disc;
+}

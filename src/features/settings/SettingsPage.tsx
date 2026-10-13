@@ -1,9 +1,8 @@
-import { useState } from 'react';
-import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Notice } from '@/components/ui/Notice';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useWorkspace } from '@/data/WorkspaceProvider';
+import { BackupPanel } from './BackupPanel';
+import { DataPanel } from './DataPanel';
 import { WeightsEditor } from './WeightsEditor';
 import styles from './SettingsPage.module.css';
 
@@ -15,37 +14,16 @@ const PALETTE = [
   { name: 'Branco', hex: '#FFFFFF' },
 ];
 
-type Pending = 'demo' | 'clear' | null;
-
 export function SettingsPage() {
-  const { data, persistent, actions } = useWorkspace();
-  const [pending, setPending] = useState<Pending>(null);
-  const [message, setMessage] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  const demoCount = data.players.filter((p) => p.demo).length;
-
-  const run = async (kind: Exclude<Pending, null>) => {
-    setBusy(true);
-    setMessage(null);
-    try {
-      if (kind === 'demo') await actions.restoreDemo();
-      else await actions.clearAllData();
-      setMessage({
-        tone: 'success',
-        text: kind === 'demo' ? 'Dados de demonstração restaurados.' : 'Todos os dados foram apagados.',
-      });
-      setPending(null);
-    } catch (error) {
-      setMessage({ tone: 'error', text: error instanceof Error ? error.message : 'Não foi possível concluir.' });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const { data, actions } = useWorkspace();
 
   return (
     <>
-      <PageHeader title="Configurações" subtitle="Identidade, cálculo do Overall e dados" />
+      <PageHeader title="Configurações" subtitle="Backup, dados, cálculo do Overall e identidade" />
+
+      <BackupPanel />
+
+      <DataPanel />
 
       <Card title="Cálculo do Overall">
         <WeightsEditor saved={data.settings.weights} onSave={actions.saveWeights} />
@@ -79,56 +57,6 @@ export function SettingsPage() {
             </li>
           ))}
         </ul>
-      </Card>
-
-      <Card title="Dados e armazenamento" id="dados">
-        <p className={styles.muted}>
-          {persistent
-            ? 'Os dados ficam salvos só neste navegador (armazenamento local). Eles não são enviados a nenhum servidor e não existe backup: outro navegador ou aparelho não vê estes dados.'
-            : 'O armazenamento do navegador está indisponível: os dados valem só até recarregar a página.'}
-        </p>
-        <p>
-          Atualmente: {data.players.length} atletas ({demoCount} de demonstração), {data.evaluations.length} avaliações e{' '}
-          {data.lineups.length} escalações.
-        </p>
-
-        {message && <Notice tone={message.tone}>{message.text}</Notice>}
-
-        <div className={styles.actions}>
-          {pending === 'demo' ? (
-            <>
-              <Button variant="danger" disabled={busy} onClick={() => void run('demo')}>
-                Confirmar: substituir tudo pela demonstração
-              </Button>
-              <Button variant="ghost" onClick={() => setPending(null)}>
-                Cancelar
-              </Button>
-            </>
-          ) : (
-            <Button onClick={() => setPending('demo')}>Restaurar dados de demonstração</Button>
-          )}
-          {pending === 'clear' ? (
-            <>
-              <Button variant="danger" disabled={busy} onClick={() => void run('clear')}>
-                Confirmar: apagar todos os dados
-              </Button>
-              <Button variant="ghost" onClick={() => setPending(null)}>
-                Cancelar
-              </Button>
-            </>
-          ) : (
-            <Button variant="danger" icon="trash" onClick={() => setPending('clear')}>
-              Apagar todos os dados
-            </Button>
-          )}
-        </div>
-        {pending && (
-          <Notice tone="warning" title="Esta ação não pode ser desfeita">
-            {pending === 'demo'
-              ? 'Atletas, avaliações e escalações atuais (inclusive os que você cadastrou) serão substituídos.'
-              : 'Atletas, avaliações e escalações serão apagados deste navegador. Os pesos do Overall são mantidos.'}
-          </Notice>
-        )}
       </Card>
     </>
   );

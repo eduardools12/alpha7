@@ -111,14 +111,17 @@ describe('Pesos do Overall', () => {
 });
 
 describe('Dados e armazenamento', () => {
-  it('apagar tudo pede confirmação, avisa que é irreversível e esvazia o elenco', async () => {
+  it('apagar tudo pede confirmação, descreve o impacto, recomenda backup e esvazia o elenco', async () => {
     const { user } = await openWeights();
     await user.click(screen.getByRole('button', { name: 'Apagar todos os dados' }));
-    expect(screen.getByText('Esta ação não pode ser desfeita')).toBeInTheDocument();
+    expect(screen.getByText('Apagar todos os dados?')).toBeInTheDocument();
     expect(screen.getByText(/Os pesos do Overall são mantidos/)).toBeInTheDocument();
+    expect(screen.getByText(/Hoje o workspace tem 18 atletas/)).toBeInTheDocument();
+    expect(screen.getByText(/Recomendado: exporte um backup antes/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Exportar backup agora' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Confirmar: apagar todos os dados' }));
     expect(await screen.findByText('Todos os dados foram apagados.')).toBeInTheDocument();
-    expect(screen.getByText(/0 atletas \(0 de demonstração\), 0 avaliações e 0 escalações/)).toBeInTheDocument();
+    expect(screen.getByText(/Atualmente: 0 atletas \(0 de demonstração\), 0 avaliações, 0 escalações, 0 treinos e 0 registros de treino/)).toBeInTheDocument();
     // o banner de demonstração some junto
     expect(screen.queryByText('Dados de demonstração', { selector: 'strong' })).not.toBeInTheDocument();
   });

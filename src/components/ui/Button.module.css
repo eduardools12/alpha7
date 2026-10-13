@@ -15,6 +15,15 @@
     transform 0.1s;
 }
 
+/* Em telas estreitas, rótulos longos quebram em linhas em vez de estourar a tela. */
+@media (max-width: 40rem) {
+  .button {
+    max-width: 100%;
+    white-space: normal;
+    text-align: center;
+  }
+}
+
 .button:active:not(:disabled) {
   transform: translateY(1px);
 }

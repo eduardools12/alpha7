@@ -1,6 +1,7 @@
 import { Link, NavLink } from 'react-router-dom';
 import { Logo } from '@/components/brand/Logo';
 import { Icon } from '@/components/ui/Icon';
+import { APP_VERSION } from '@/version';
 import { NAV_ITEMS, PATHS } from './routes';
 import styles from './Sidebar.module.css';
 
@@ -22,7 +23,7 @@ export function Sidebar() {
           ))}
         </ul>
       </nav>
-      <p className={styles.foot}>Versão 0.2 · dados salvos neste navegador</p>
+      <p className={styles.foot}>Versão {APP_VERSION} · dados salvos neste navegador</p>
     </aside>
   );
 }

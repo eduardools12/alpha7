@@ -44,6 +44,13 @@ export function formatDateTime(localDateTime: string): string {
   return time ? `${date} às ${time}` : date;
 }
 
+/** Instante ISO → "13 de out. de 2026, 21:05" no fuso do navegador. */
+export function formatInstant(iso: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso;
+  return date.toLocaleString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 export function formatSigned(value: number): string {
   if (value > 0) return `+${value}`;
   if (value < 0) return `−${Math.abs(value)}`;

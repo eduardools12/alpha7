@@ -1,6 +1,10 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup } from '@testing-library/react';
+import { cleanup, configure } from '@testing-library/react';
 import { afterEach } from 'vitest';
+
+// Com dezenas de arquivos de teste em paralelo a CPU fica disputada e o 1 s padrão de findBy*/waitFor
+// estoura sem haver defeito (a espera só dura até o elemento aparecer, então não deixa testes lentos).
+configure({ asyncUtilTimeout: 6000 });
 
 afterEach(() => {
   cleanup();
