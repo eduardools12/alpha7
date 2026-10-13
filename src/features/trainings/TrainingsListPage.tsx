@@ -4,12 +4,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
 import { DemoTag } from '@/components/ui/Badge';
 import { Button, ButtonLink } from '@/components/ui/Button';
-import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { FixtureRow } from '@/components/ui/FixtureRow';
 import { Notice } from '@/components/ui/Notice';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useWorkspace } from '@/data/WorkspaceProvider';
-import { formatDate } from '@/domain/format';
+import { dateBlock, formatDate } from '@/domain/format';
 import { TRAINING_STATUS_LABEL, cascadeCounts, validEvents } from '@/domain/training';
 import { formatDuration } from './trainingFormat';
 import styles from './TrainingsListPage.module.css';
@@ -80,42 +80,33 @@ export function TrainingsListPage() {
           são calculadas só do que for registrado.
         </EmptyState>
       ) : (
-        <ul className={styles.grid}>
-          {trainings.map((training, index) => {
+        <div className={`${styles.ledger} enter`}>
+          {trainings.map((training) => {
             const counts = cascadeCounts(training.id, data.exercises, data.trainingEvents);
             const valid = validEvents(data.trainingEvents.filter((e) => e.trainingId === training.id)).length;
             const open = training.status === 'aberto';
+            const block = dateBlock(training.date);
             return (
-              <li key={training.id} className="enter" style={{ '--i': Math.min(index, 8) } as React.CSSProperties}>
-                <Card as="article" className={styles.card}>
-                  <header className={styles.head}>
-                    <h2 className={styles.title}>{training.name}</h2>
-                    <span className={styles.tags}>
-                      <span className={`${styles.status} ${open ? styles.open : styles.done}`}>
-                        {TRAINING_STATUS_LABEL[training.status]}
-                      </span>
-                      {training.demo && <DemoTag />}
-                    </span>
-                  </header>
-                  <p className={styles.meta}>
-                    {formatDate(training.date)} · {formatDuration(training.durationMinutes)}
-                    {training.responsible && ` · ${training.responsible}`}
-                  </p>
-                  <dl className={styles.facts}>
-                    <div>
-                      <dt>Participantes</dt>
-                      <dd className="tabular">{training.participantIds.length}</dd>
-                    </div>
-                    <div>
-                      <dt>Exercícios</dt>
-                      <dd className="tabular">{counts.exercises}</dd>
-                    </div>
-                    <div>
-                      <dt>Registros</dt>
-                      <dd className="tabular">{valid}</dd>
-                    </div>
-                  </dl>
-                  <div className={styles.actions}>
+              <FixtureRow
+                key={training.id}
+                day={block.day}
+                month={block.month}
+                tone={open ? 'open' : 'done'}
+                title={training.name}
+                tags={
+                  <>
+                    <span className={`${styles.status} ${open ? styles.open : styles.done}`}>{TRAINING_STATUS_LABEL[training.status]}</span>
+                    {training.demo && <DemoTag />}
+                  </>
+                }
+                meta={`${formatDate(training.date)} · ${formatDuration(training.durationMinutes)}${training.responsible ? ` · ${training.responsible}` : ''}`}
+                stats={[
+                  { label: 'Participantes', value: training.participantIds.length },
+                  { label: 'Exercícios', value: counts.exercises },
+                  { label: 'Registros', value: valid },
+                ]}
+                actions={
+                  <>
                     {open && (
                       <Can to="events:record"><ButtonLink to={PATHS.recordTraining(training.id)} variant="primary" icon="plus">
                         Registrar
@@ -134,14 +125,16 @@ export function TrainingsListPage() {
                         </Button>
                       </Can>
                     )}
-                  </div>
-                  {confirming === training.id && (
-                    <div className={styles.confirm}>
+                  </>
+                }
+                below={
+                  confirming === training.id ? (
+                    <>
                       <Notice tone="warning" title={`Excluir "${training.name}"?`}>
                         Serão apagados {counts.exercises} {counts.exercises === 1 ? 'exercício' : 'exercícios'} e{' '}
                         {counts.events} {counts.events === 1 ? 'registro' : 'registros'} deste treino. Isso não pode ser desfeito.
                       </Notice>
-                      <div className={styles.actions}>
+                      <div className={styles.confirmActions}>
                         <Button variant="danger" icon="trash" disabled={busy} onClick={() => void remove(training.id)}>
                           Confirmar exclusão
                         </Button>
@@ -149,13 +142,13 @@ export function TrainingsListPage() {
                           Cancelar
                         </Button>
                       </div>
-                    </div>
-                  )}
-                </Card>
-              </li>
+                    </>
+                  ) : undefined
+                }
+              />
             );
           })}
-        </ul>
+        </div>
       )}
 
       <p className={styles.footnote}>

@@ -35,7 +35,7 @@
   gap: var(--s-3);
   min-height: var(--tap);
   padding: 0 var(--s-3);
-  border-radius: var(--r-sm);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
   color: var(--a7-lilac-100);
   font-weight: 500;
   text-decoration: none;
@@ -47,7 +47,8 @@
 }
 
 .active {
-  background: rgb(255 255 255 / 0.14);
+  background: rgb(255 255 255 / 0.1);
+  box-shadow: inset 3px 0 0 var(--a7-lilac-300);
   color: #fff;
   font-weight: 650;
 }

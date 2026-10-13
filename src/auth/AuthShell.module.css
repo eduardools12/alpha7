@@ -1,10 +1,44 @@
 .page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto 1fr;
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+/* Painel da marca: roxo oficial, linhas de quadra ao fundo. Em telas estreitas vira uma faixa no topo. */
+.brand {
+  position: relative;
   display: flex;
   align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-5) var(--s-4);
+  overflow: hidden;
+  background: var(--a7-purple-900);
+}
+
+.court {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--a7-lilac-300);
+  opacity: 0.16;
+}
+
+.brand > :not(.court) {
+  position: relative;
+}
+
+.statement {
+  display: none;
+}
+
+.panel {
+  display: flex;
+  align-items: flex-start;
   justify-content: center;
-  min-height: 100dvh;
-  padding: var(--s-6) var(--s-4);
-  background: var(--bg);
+  padding: var(--s-6) var(--s-4) var(--s-8);
 }
 
 .column {
@@ -12,12 +46,54 @@
   flex-direction: column;
   gap: var(--s-5);
   width: 100%;
-  max-width: 28rem;
+  max-width: 26rem;
 }
 
-.brand {
-  display: flex;
-  justify-content: center;
+.title {
+  padding-bottom: var(--s-3);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+@media (min-width: 56rem) {
+  .page {
+    grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    grid-template-rows: auto;
+  }
+
+  .brand {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: var(--s-8);
+  }
+
+  .brand :global(img) {
+    height: 4.5rem;
+    width: auto;
+  }
+
+  .statement {
+    display: block;
+    max-width: 16ch;
+    font-family: var(--font-display);
+    font-size: clamp(2.4rem, 4vw, 3.6rem);
+    font-weight: 700;
+    line-height: 1.02;
+    text-transform: uppercase;
+    text-wrap: balance;
+    margin-top: auto;
+  }
+
+  .panel {
+    align-items: center;
+    padding: var(--s-8);
+  }
 }
 
 .form {

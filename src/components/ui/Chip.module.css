@@ -2,7 +2,7 @@
   min-height: 2.5rem;
   padding: 0 var(--s-4);
   border: 1px solid var(--line-strong);
-  border-radius: var(--r-pill);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--a7-lilac-100);
   font-size: var(--fs-sm);

@@ -1,3 +1,82 @@
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-5);
+}
+
+.index {
+  display: none;
+  min-width: 0;
+}
+
+.sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-6);
+  min-width: 0;
+}
+
+.sections > section {
+  scroll-margin-top: var(--s-5);
+}
+
+/* Índice das seções: lista de âncoras fixa ao lado, só em telas largas (no celular a página já é uma coluna curta). */
+.index ul {
+  display: flex;
+  gap: var(--s-1);
+  padding: 0;
+}
+
+.index a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0 var(--s-3);
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+.index a:hover {
+  color: var(--text);
+  border-bottom-color: var(--a7-lilac-300);
+}
+
+@media (min-width: 80rem) {
+  .layout {
+    grid-template-columns: 13rem minmax(0, 1fr);
+    gap: var(--s-8);
+    align-items: start;
+  }
+
+  .index {
+    display: block;
+    position: sticky;
+    top: var(--s-5);
+  }
+
+  .index ul {
+    flex-direction: column;
+    overflow: visible;
+    border-left: 1px solid var(--line);
+  }
+
+  .index a {
+    padding: 0 var(--s-4);
+    margin-left: -1px;
+    border-bottom: 0;
+    border-left: 2px solid transparent;
+    white-space: normal;
+  }
+
+  .index a:hover {
+    border-left-color: var(--a7-lilac-300);
+  }
+}
+
 .muted {
   color: var(--text-muted);
   font-size: var(--fs-sm);

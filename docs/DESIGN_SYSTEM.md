@@ -33,12 +33,12 @@ O brief fixou os códigos oficiais como "referências iniciais". Conferidos cont
 
 Escala: 12 / 14 / 16 / 18 / 22 / 28 / 36 / 48 px (`--fs-xs` a `--fs-4xl`). Títulos de página 700 a 800 com espaçamento levemente negativo. Texto corrido até ~65 caracteres por linha (`text-wrap: pretty`). Números de coluna usam `font-variant-numeric: tabular-nums` (classe `.tabular`).
 
-Nomes em caixa alta existem só na carta (convenção de carta esportiva, presente na referência). Em todo o resto, frase com inicial maiúscula.
+Nomes em caixa alta existem na carta (convenção de carta esportiva, presente na referência) e nos **títulos de seção** (ver seção 12: Barlow Condensed em caixa alta sobre um filete). Em todo o resto — botões, rótulos, texto corrido —, frase com inicial maiúscula.
 
 ## 3. Espaçamento, raios e movimento
 
 - Base de 4px: `--s-1` (4) a `--s-12` (48).
-- Raios: 8px controles, 12px cartões, 18px painéis de herói, pílula para chips e etiquetas.
+- Raios (desde a seção 12): 4px controles e filtros, 6px painéis, 10px o maior; etiquetas com 3px. Pílula só em avatares e pontos de resultado.
 - Sem sombras decorativas nos cartões (hierarquia por superfície). Sombra só em menus flutuantes.
 - Movimento: apenas resposta a ação do usuário (hover da carta, pressionar botão, spinner). `prefers-reduced-motion` zera durações.
 
@@ -151,3 +151,14 @@ Mesma identidade (roxo `#270949`, branco, grafite, cinza-claro, lilás); nada de
 - **Rotação sempre visível** na tela de partida: faixa sob o placar (“Rotação 2 · saca … · levantador em P6”), porque a quadra fica abaixo da dobra no celular.
 
 **Referências externas** (só inspiração, nada copiado nem salvo no repositório): consultei de fato o shot principal do Dribbble (painel com herói fotográfico, quadra, cartões com mini gráficos) e a página inicial do ReactBits (sem conteúdo útil capturado). Não consegui examinar as demais (Motion, 21st.dev, DashboardCN, shadcn chart, o segundo shot do Dribbble); para elas valeram as descrições do pedido e o conhecimento geral dos padrões (cartões de indicador com mini gráfico, dica com legenda, hover discreto de carta).
+
+## 12. Linguagem visual de "placar esportivo" (pós-0.6.0)
+
+Objetivo: tirar o aspecto de painel genérico (pilha de cartões arredondados iguais, pílulas, centralizado e simétrico) e deixar a interface com a cara de uma equipe de vôlei. Mesma paleta; mudam estrutura e silhueta.
+
+- **Silhueta da carta de atleta como assinatura:** canto inferior direito cortado (`--cut`) nos painéis de destaque (`StatTile`, herói do perfil). É o único recurso decorativo e vem do próprio produto.
+- **Seções:** painel plano (`Card`) com filete interno em vez de sombra; título da seção em Barlow Condensed, caixa alta, sobre um filete. Raios pequenos e etiquetas retangulares (`Badge`, `Chip`) no lugar de pílulas. Item ativo da navegação com barra lilás à esquerda.
+- **Listas de agenda** (`FixtureRow`, usada em Treinos e Partidas): uma linha por jogo/treino dentro de um único painel, com bloco de data (dia grande, mês), título, números em linha (participantes, exercícios, registros) ou placar à direita, ações à direita e faixa lateral de situação (âmbar = em andamento, verde = concluído; a situação também aparece em texto na etiqueta). No celular as ações dividem a largura de cada linha. Os nomes acessíveis dos botões ("Excluir {nome}") e a confirmação de exclusão são os de antes.
+- **Entrada (login, nova senha, escolha de equipe, erro de configuração):** `AuthShell` em duas áreas. Painel roxo oficial com as linhas de uma quadra 18 x 9 m (rede, linhas de ataque) em lilás de baixa opacidade, o símbolo A7 original e uma frase; formulário sem caixa ao lado, com título em condensada e filete. Abaixo de 56 rem o painel vira uma faixa no topo. O texto do título continua `h2` e os fluxos de autenticação não mudaram.
+- **Configurações:** índice de âncoras (coluna fixa ao lado, só a partir de 80 rem; no celular a página segue em uma coluna) para as seções Conta e equipe, Backup e restauração, Dados e armazenamento, Cálculo do Overall e Identidade da equipe. Conteúdo e regras das seções inalterados.
+- **Não foi feito:** gradientes decorativos, ilustrações, fotos de fundo. As referências externas continuam valendo só como inspiração (ver seção 11); nada foi copiado.

@@ -22,6 +22,13 @@ export function formatDayMonth(isoDate: string): string {
   return `${p[2]} ${MONTHS_SHORT[p[1] - 1] ?? ''}`;
 }
 
+/** "2026-10-07" → { day: "07", month: "out" } para o bloco de data das listas. Sem data válida: traço e mês vazio. */
+export function dateBlock(isoDate: string): { day: string; month: string } {
+  const p = parts(isoDate);
+  if (!p) return { day: '—', month: '' };
+  return { day: String(p[2]).padStart(2, '0'), month: MONTHS_SHORT[p[1] - 1] ?? '' };
+}
+
 /** "2026-10-07" → "out 2026" */
 export function formatMonthYear(isoDate: string): string {
   const p = parts(isoDate);

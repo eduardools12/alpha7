@@ -25,36 +25,37 @@
   font-size: var(--fs-sm);
 }
 
-.grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
-  gap: var(--s-4);
+.ledger {
+  background: var(--surface-1);
+  border-radius: var(--r-md);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
 }
 
-.card {
-  height: 100%;
+.score {
+  font-family: var(--font-display);
+  font-size: 2.2rem;
+  font-weight: 700;
+  line-height: 1;
 }
 
-.head {
+.scoreNote {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+}
+
+.confirmActions {
   display: flex;
   flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
   gap: var(--s-2);
-}
-
-.title {
-  font-size: var(--fs-xl);
-  font-weight: 700;
-  min-width: 0;
 }
 
 .status {
   display: inline-flex;
   align-items: center;
-  min-height: 1.5rem;
+  min-height: 1.4rem;
   padding: 0 var(--s-2);
-  border-radius: var(--r-pill);
+  border-radius: 3px;
   font-size: var(--fs-xs);
   font-weight: 650;
   white-space: nowrap;
@@ -95,7 +96,7 @@
 
 .outcome {
   padding: 0 var(--s-2);
-  border-radius: var(--r-pill);
+  border-radius: 3px;
   font-size: var(--fs-xs);
   font-weight: 650;
 }
@@ -113,11 +114,6 @@
 .empate {
   background: var(--info-bg);
   color: var(--info);
-}
-
-.format {
-  color: var(--text-faint);
-  font-size: var(--fs-xs);
 }
 
 .actions {

@@ -6,9 +6,8 @@
   align-items: center;
   padding: var(--s-5);
   overflow: hidden;
-  background: linear-gradient(115deg, var(--a7-purple-950) 0%, var(--a7-purple-800) 55%, var(--a7-purple-700) 100%);
-  border: 1px solid rgb(185 166 208 / 0.22);
-  border-radius: var(--r-lg);
+  background: linear-gradient(118deg, var(--a7-purple-950) 0 58%, var(--a7-purple-900) 58% 100%);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - 1.6rem), calc(100% - 1.6rem) 100%, 0 100%);
 }
 
 @media (min-width: 52rem) {

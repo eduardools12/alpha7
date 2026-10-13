@@ -1,0 +1,173 @@
+/* Lista de agenda: linhas planas separadas por filete, em um único painel (sem uma caixa por item). */
+.row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 4.25rem minmax(0, 1fr) auto auto;
+  grid-template-areas: 'date main result actions' 'below below below below';
+  align-items: center;
+  gap: var(--s-3) var(--s-5);
+  padding: var(--s-4) var(--s-5) var(--s-4) var(--s-4);
+  border-bottom: 1px solid var(--line);
+  transition: background-color var(--dur-fast);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row:hover {
+  background: rgb(185 166 208 / 0.05);
+}
+
+/* Faixa de situação na lateral: aberto (âmbar), concluído (verde). */
+.row::before {
+  content: '';
+  position: absolute;
+  inset: var(--s-3) auto var(--s-3) 0;
+  width: 3px;
+  background: transparent;
+}
+
+.open::before {
+  background: var(--warn);
+}
+
+.done::before {
+  background: var(--ok);
+}
+
+.date {
+  grid-area: date;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+  color: var(--a7-lilac-100);
+}
+
+.day {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.month {
+  margin-top: 0.15rem;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.main {
+  grid-area: main;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2) var(--s-3);
+}
+
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.meta {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-6);
+  margin: var(--s-2) 0 0;
+}
+
+.stats div {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+
+.stats dt {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.stats dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.result {
+  grid-area: result;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: var(--s-1);
+  text-align: right;
+}
+
+.actions {
+  grid-area: actions;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s-2);
+}
+
+.below {
+  grid-area: below;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+@media (max-width: 52rem) {
+  .row {
+    grid-template-columns: 3.25rem minmax(0, 1fr);
+    grid-template-areas: 'date main' 'result result' 'actions actions' 'below below';
+    gap: var(--s-3) var(--s-3);
+  }
+
+  .day {
+    font-size: 2rem;
+  }
+
+  .result {
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-start;
+    text-align: left;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
+
+  /* Botões repartem a largura de cada linha: sem sobras nem recuos irregulares. */
+  .actions > * {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
