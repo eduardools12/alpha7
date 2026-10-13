@@ -1,6 +1,6 @@
 # Modelo de dados
 
-Duas partes: **(A)** o que existe hoje em código (TypeScript + localStorage) e **(B)** a proposta de banco PostgreSQL/Supabase, ainda **não implementada**.
+Duas partes: **(A)** o que o aplicativo usa hoje (TypeScript + localStorage) e **(B)** o banco PostgreSQL/Supabase. **O esquema do banco já existe** no projeto `alpha7` (fase 1) e a fonte da verdade são as migrações em [`supabase/migrations/`](../supabase/migrations) e o [`supabase/README.md`](../supabase/README.md); o **aplicativo ainda não usa o banco**.
 
 ## A. Estado atual (implementado)
 
@@ -46,9 +46,9 @@ Integridade de treinos (aplicada no domínio **e** de novo no gateway, para que 
 
 Limitações: um só navegador, sem multiusuário, sem fotos. **Os dados locais não estão sincronizados com a nuvem** e o limite do `localStorage` (cerca de 5 MB por site) restringe o volume de registros; cada gravação regrava o conjunto inteiro (adequado ao volume de uma equipe amadora, não ao backend definitivo). A proteção contra perda é o **backup em arquivo**: sem ele, limpar os dados do navegador apaga tudo.
 
-## B. Proposta para Supabase/PostgreSQL (planejado)
+## B. Supabase/PostgreSQL
 
-> **O SQL abaixo é uma proposta de projeto. Não foi executado em nenhum banco** nem validado contra o Postgres; revise e teste em um branch do Supabase antes de aplicar.
+> **Atenção: o SQL desta seção é a proposta ORIGINAL e está superado.** O esquema real difere dela em pontos importantes: ids em **texto** (os mesmos do app e dos backups) com chave `(team_id, id)` e chaves estrangeiras sempre com `team_id`; escalações normalizadas em `lineup_starters`/`lineup_bench`; `scheduled_at` da escalação como texto; tabela de registros chamada `training_events`; gatilhos de append-only; papéis `coach`/`analyst`/`viewer`. Consulte `supabase/migrations/`. O texto abaixo fica só como registro do raciocínio inicial.
 
 Princípios: todo dado pertence a uma **equipe** (`team_id`) para que a arquitetura não dependa do Alpha7; **RLS** em todas as tabelas, escopo por `team_members`; avaliações, tentativas e rallies **nunca são apagados nem editados**: correção = nova linha + marca de anulação; chaves de idempotência contra contagem em dobro; Overall continua calculado (visão ou cliente), não gravado.
 

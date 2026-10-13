@@ -173,7 +173,9 @@ Nunca substitui em silêncio. O painel descreve o impacto, mostra "Hoje o worksp
 - **Verificar integridade**: roda a validação estrita sobre o que está salvo e lista os problemas.
 - **Persistência**: o app pede `navigator.storage.persist()` e informa o resultado. Mesmo concedida, isso reduz mas **não elimina** o risco de perda.
 
-## 10. Para a futura migração ao Supabase (não iniciada)
+## 10. Migração ao Supabase (fase 1 feita no banco; o app ainda é local)
+
+**Estado:** o projeto `alpha7` existe, com esquema, RLS por equipe e testes de segurança (`supabase/`). O aplicativo **não** o usa: continua em `localStorage`, e **nenhum dado real foi para a nuvem**. Não envie dados reais antes de existir login (fase seguinte). Detalhes, papéis e limites: `supabase/README.md`. O que vale para a migração dos dados locais:
 
 Preservar, como contrato:
 

@@ -16,7 +16,8 @@ Aplicação web de gestão esportiva e análise de desempenho para uma equipe am
 | Partidas, Estatísticas consolidadas | **Não implementadas**: telas honestas de "em desenvolvimento" |
 | Gerador de artes (pôster da escalação) | **Não implementado**: botão desativado |
 | Proteção dos dados (v0.3): exportar/importar backup JSON validado, cópia automática com desfazer, confirmação reforçada, verificar integridade, lembrete, recuperação de dado ilegível | Implementado. Auditoria e riscos: `docs/DATA_SAFETY.md` |
-| Backend (Supabase), autenticação, upload de fotos | **Não implementados**: persistência em `localStorage` (um navegador, sem nuvem; o backup em arquivo é a proteção) |
+| Supabase fase 1: projeto `alpha7`, esquema, RLS por equipe e papéis, testes de segurança no banco | Implementado no banco (`supabase/`). **O aplicativo ainda não usa**: sem login, sem `SupabaseGateway`; nenhum dado real foi enviado |
+| Login, `SupabaseGateway`, importação para a nuvem, upload de fotos | **Não implementados**: persistência em `localStorage` (um navegador, sem nuvem; o backup em arquivo é a proteção) |
 
 ## Stack
 
@@ -84,7 +85,8 @@ Regra de dependência: `domain` não importa nada de fora de `domain`. `data` im
 
 ## Segurança
 
-- Não existem segredos no repositório. Quando o Supabase for integrado: só a chave **anon/publicável** no frontend, via `VITE_*` em `.env.local` (ignorado pelo Git; modelo em `.env.example`). Chave `service_role` nunca vai ao frontend.
+- Não existem segredos no repositório. Supabase: só a chave **publishable/anon** no frontend, via `VITE_*` em `.env.local` (ignorado pelo Git; modelo em `.env.example`). Chave `service_role` nunca vai ao frontend nem ao Git.
+- **Banco (`supabase/`):** toda mudança de esquema é uma **nova** migração em `supabase/migrations/` (não edite uma já aplicada), aplicada no projeto com o mesmo SQL, seguida de `supabase/tests/rls.test.sql` (deve terminar em `TESTES_OK`) e dos advisors de segurança/desempenho. Toda tabela nova tem `team_id`, RLS e privilégios mínimos (o Supabase concede tudo a `authenticated` por padrão: revogue e conceda só o necessário). Não envie dados reais à nuvem antes de existir login.
 - Proteção real dos dados virá de RLS no Postgres (escopo por equipe), não de lógica no cliente.
 - Dados do `localStorage` são tratados como não confiáveis: o gateway valida o formato e recusa dados corrompidos (guarda cópia de recuperação).
 - **Proteção de dados (detalhes em `docs/DATA_SAFETY.md`):**
