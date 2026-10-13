@@ -1,12 +1,36 @@
 import { isValidAttributeValue, ATTRIBUTE_KEYS } from '@/domain/attributes';
 import { toFundamentalResult } from '@/domain/fundamentals';
 import { COURT_SLOTS, FORMATIONS, type Lineup } from '@/domain/lineup';
+import {
+  MATCH_STATUSES,
+  isRallyReason,
+  validateFormat,
+  type ActionInput,
+  type Match,
+  type MatchSet,
+  type Rally,
+  type RallyAction,
+  type RallyInput,
+  type StartSetInput,
+} from '@/domain/match';
 import { cloneWeights, DEFAULT_OVERALL_WEIGHTS, validatePositionWeights, type OverallWeights } from '@/domain/overall';
 import { PLAYER_STATUSES, UNIFORM_COLORS, type Evaluation, type Player } from '@/domain/player';
-import { isPosition, POSITIONS } from '@/domain/positions';
+import { isCourtRole, isPosition, POSITIONS } from '@/domain/positions';
 import { TRAINING_STATUSES, type Training, type TrainingEvent, type TrainingExercise } from '@/domain/training';
 import { summarizeWorkspace } from './backup';
 import { LAST_BACKUP_KEY } from './backupMeta';
+import {
+  addRallyActionOp,
+  cancelEmptySetOp,
+  concludeMatchOp,
+  deleteMatchOp,
+  recordRallyOp,
+  reopenMatchOp,
+  saveMatchOp,
+  startSetOp,
+  voidLastRallyOp,
+  voidRallyActionOp,
+} from './matchOps';
 import {
   IntegrityError,
   StorageCorruptedError,
@@ -132,6 +156,70 @@ function looksLikeTrainingEvent(value: unknown): value is TrainingEvent {
   );
 }
 
+function looksLikeMatch(value: unknown): value is Match {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.opponent) &&
+    isString(value.competition) &&
+    isString(value.scheduledAt) &&
+    isString(value.venue) &&
+    (value.lineupId === null || isString(value.lineupId)) &&
+    isRecord(value.format) &&
+    validateFormat(value.format as unknown as Match['format']) === null &&
+    (MATCH_STATUSES as readonly string[]).includes(value.status as string) &&
+    (value.finalSetsUs === null || typeof value.finalSetsUs === 'number') &&
+    (value.finalSetsThem === null || typeof value.finalSetsThem === 'number') &&
+    (value.concludedAt === null || isString(value.concludedAt))
+  );
+}
+
+function looksLikeMatchSet(value: unknown): value is MatchSet {
+  return (
+    isRecord(value) &&
+    isString(value.matchId) &&
+    typeof value.number === 'number' &&
+    (value.firstServer === 'us' || value.firstServer === 'them') &&
+    (value.liberoId === null || isString(value.liberoId)) &&
+    Array.isArray(value.starters) &&
+    value.starters.length === 6 &&
+    value.starters.every((s) => isRecord(s) && typeof s.slot === 'number' && isString(s.playerId) && isCourtRole(s.role))
+  );
+}
+
+function looksLikeRally(value: unknown): value is Rally {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.matchId) &&
+    typeof value.setNumber === 'number' &&
+    typeof value.seq === 'number' &&
+    (value.servingSide === 'us' || value.servingSide === 'them') &&
+    (value.winnerSide === 'us' || value.winnerSide === 'them') &&
+    typeof value.rotation === 'number' &&
+    (value.serverPlayerId === null || isString(value.serverPlayerId)) &&
+    (value.reason === null || isRallyReason(value.reason)) &&
+    (value.playerId === null || isString(value.playerId)) &&
+    isString(value.attemptKey) &&
+    isString(value.recordedAt) &&
+    (value.voidedAt === null || isString(value.voidedAt))
+  );
+}
+
+function looksLikeRallyAction(value: unknown): value is RallyAction {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.matchId) &&
+    isString(value.rallyId) &&
+    isString(value.playerId) &&
+    isString(value.attemptKey) &&
+    isString(value.recordedAt) &&
+    (value.voidedAt === null || isString(value.voidedAt)) &&
+    toFundamentalResult(value.fundamental, value.outcome) !== null
+  );
+}
+
 function readWeights(value: unknown): OverallWeights {
   if (!isRecord(value)) return cloneWeights(DEFAULT_OVERALL_WEIGHTS);
   const result = cloneWeights(DEFAULT_OVERALL_WEIGHTS);
@@ -186,6 +274,10 @@ function parseWorkspace(raw: string): Workspace {
     trainings: optionalList(data.trainings, looksLikeTraining, 'treinos inválidos'),
     exercises: optionalList(data.exercises, looksLikeExercise, 'exercícios inválidos'),
     trainingEvents: optionalList(data.trainingEvents, looksLikeTrainingEvent, 'registros de treino inválidos'),
+    matches: optionalList(data.matches, looksLikeMatch, 'partidas inválidas'),
+    matchSets: optionalList(data.matchSets, looksLikeMatchSet, 'sets inválidos'),
+    rallies: optionalList(data.rallies, looksLikeRally, 'pontos de partida inválidos'),
+    rallyActions: optionalList(data.rallyActions, looksLikeRallyAction, 'ações técnicas de partida inválidas'),
   };
 }
 
@@ -452,6 +544,83 @@ export class LocalStorageGateway implements DataGateway {
       ws.trainingEvents = ws.trainingEvents.map((e) => (e.id === eventId ? { ...e, voidedAt } : e));
       return true;
     });
+  }
+
+  /* ───────── partidas ───────── */
+
+  async saveMatch(match: Match): Promise<Match> {
+    let saved: Match = match;
+    this.update((ws) => {
+      saved = saveMatchOp(ws, match);
+    });
+    return saved;
+  }
+
+  async deleteMatch(matchId: string): Promise<void> {
+    // Apaga a partida e tudo o que é dela: guarda antes a cópia de segurança (a mesma da exclusão de treino).
+    const previousRaw = this.rawCurrent();
+    const target = this.current().matches.find((m) => m.id === matchId);
+    if (previousRaw !== null && target) this.saveSnapshot(previousRaw, `exclusão da partida contra "${target.opponent}"`);
+    this.update((ws) => deleteMatchOp(ws, matchId));
+  }
+
+  async startSet(matchId: string, input: StartSetInput) {
+    let result!: ReturnType<typeof startSetOp>;
+    this.update((ws) => {
+      result = startSetOp(ws, matchId, input, new Date().toISOString());
+    });
+    return result;
+  }
+
+  async recordRally(matchId: string, input: RallyInput) {
+    let result!: ReturnType<typeof recordRallyOp>;
+    this.update((ws) => {
+      result = recordRallyOp(ws, matchId, input);
+      return !result.duplicate; // repetição do mesmo toque não grava nada
+    });
+    return result;
+  }
+
+  async voidLastRally(matchId: string, rallyId: string, voidedAt: string): Promise<void> {
+    this.update((ws) => voidLastRallyOp(ws, matchId, rallyId, voidedAt));
+  }
+
+  async cancelEmptySet(matchId: string, number: number): Promise<Match> {
+    let match!: Match;
+    this.update((ws) => {
+      match = cancelEmptySetOp(ws, matchId, number, new Date().toISOString());
+    });
+    return match;
+  }
+
+  async concludeMatch(matchId: string, concludedAt: string): Promise<Match> {
+    let match!: Match;
+    this.update((ws) => {
+      match = concludeMatchOp(ws, matchId, concludedAt);
+    });
+    return match;
+  }
+
+  async reopenMatch(matchId: string): Promise<Match> {
+    let match!: Match;
+    this.update((ws) => {
+      match = reopenMatchOp(ws, matchId, new Date().toISOString());
+    });
+    return match;
+  }
+
+  async addRallyAction(input: ActionInput & { rallyId: string; recordedAt: string }): Promise<RallyAction> {
+    let action!: RallyAction;
+    this.update((ws) => {
+      const before = ws.rallyActions.length;
+      action = addRallyActionOp(ws, input);
+      return ws.rallyActions.length !== before;
+    });
+    return action;
+  }
+
+  async voidRallyAction(actionId: string, voidedAt: string): Promise<void> {
+    this.update((ws) => voidRallyActionOp(ws, actionId, voidedAt));
   }
 
   private current(): Workspace {

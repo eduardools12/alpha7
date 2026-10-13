@@ -1,3 +1,4 @@
+import type { Capability } from '@/auth/permissions';
 import type { IconName } from '@/components/ui/Icon';
 
 export const PATHS = {
@@ -16,7 +17,12 @@ export const PATHS = {
   editTraining: (id: string) => `/treinos/${id}/editar`,
   recordTraining: (id: string) => `/treinos/${id}/registrar`,
   matches: '/partidas',
+  newMatch: '/partidas/nova',
+  match: (id: string) => `/partidas/${id}`,
+  editMatch: (id: string) => `/partidas/${id}/editar`,
+  liveMatch: (id: string) => `/partidas/${id}/acompanhar`,
   stats: '/estatisticas',
+  arts: '/artes',
   settings: '/configuracoes',
 } as const;
 
@@ -28,6 +34,8 @@ export interface NavItem {
   end?: boolean;
   /** Em telas pequenas, vai para o menu "Mais" em vez da barra inferior. */
   secondary?: boolean;
+  /** Só aparece no menu para quem tem esta permissão (a rota também é protegida). */
+  capability?: Capability;
 }
 
 export const NAV_ITEMS: NavItem[] = [
@@ -37,5 +45,6 @@ export const NAV_ITEMS: NavItem[] = [
   { to: PATHS.trainings, label: 'Treinos', icon: 'list' },
   { to: PATHS.matches, label: 'Partidas', icon: 'court', secondary: true },
   { to: PATHS.stats, label: 'Estatísticas', icon: 'chart', secondary: true },
+  { to: PATHS.arts, label: 'Gerador de artes', icon: 'lineup', secondary: true, capability: 'arts:generate' },
   { to: PATHS.settings, label: 'Configurações', icon: 'settings', secondary: true },
 ];

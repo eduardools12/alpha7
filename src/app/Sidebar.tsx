@@ -1,6 +1,7 @@
 import { Link, NavLink } from 'react-router-dom';
 import { Logo } from '@/components/brand/Logo';
 import { Icon } from '@/components/ui/Icon';
+import { useAccess } from '@/auth/AccessContext';
 import { useSessionInfo } from '@/auth/TeamGate';
 import { ROLE_LABEL } from '@/auth/permissions';
 import { useWorkspace } from '@/data/WorkspaceProvider';
@@ -11,6 +12,7 @@ import styles from './Sidebar.module.css';
 export function Sidebar() {
   const session = useSessionInfo();
   const { backend } = useWorkspace();
+  const access = useAccess();
   return (
     <aside className={styles.sidebar}>
       <Link to={PATHS.dashboard} className={styles.brand} aria-label="Alpha7 Volleyball Performance, ir ao dashboard">
@@ -18,7 +20,7 @@ export function Sidebar() {
       </Link>
       <nav aria-label="Principal">
         <ul className={styles.list}>
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter((item) => !item.capability || access.can(item.capability)).map((item) => (
             <li key={item.to}>
               <NavLink to={item.to} end={item.end ?? false} className={({ isActive }) => `${styles.link} ${isActive ? styles.active : ''}`}>
                 <Icon name={item.icon} />

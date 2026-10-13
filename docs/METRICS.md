@@ -141,16 +141,13 @@ overall = arredonda( Σ(nota_i × peso_i) ÷ Σ(peso_i) ),  limitado a 1..99
 
 ## B. Definidas e não implementadas
 
-Dependem de partidas (rallies). Seguem os princípios 2 a 5.
+Seguem os princípios 2 a 5. (Side-out, aproveitamento de vitórias e fundamentos em jogo passaram a existir na 0.5.0: veja a seção D.)
 
 | Métrica | Fórmula | Contexto exibido |
 |---|---|---|
-| Sucesso no side-out | rallies ganhos recebendo o saque ÷ rallies em que A7 recebeu | "95 de 152" |
 | Pontos por jogo | pontos de ataque, bloqueio e ace ÷ partidas em que o atleta jogou | partidas |
-| Aproveitamento de vitórias | vitórias ÷ partidas disputadas | "11 de 14" (hoje só demonstração) |
-| Indicadores de fundamentos **em jogo** | mesmas fórmulas dos treinos, sobre eventos de partida | tentativas |
 
-Eventos de partida terão coleção própria; **não** se misturam com os de treino. Estatística consolidada de equipe por período (referência 07) depende de definir recortes.
+Não implementada porque misturaria o motivo do ponto (que não identifica sempre o atleta) com ações técnicas; ver "Motivo do ponto x ação técnica" na seção D.
 
 ## C. Decisões iniciais que precisam de validação
 
@@ -169,3 +166,49 @@ Estas regras foram **adotadas** para a primeira versão do módulo de treinos (p
 11. **Pesos do Overall** (tabela acima): revisão por posição e se atributos físicos devem pesar na nota de atleta amador.
 12. **Partidas:** formato da competição (sets, pontos, set decisivo, substituições), motivos do ponto e quando "não informado" é aceitável.
 13. **Evolução por janela temporal** (30 dias, temporada): definir recortes antes de criar o seletor de período.
+
+## D. Partidas e estatísticas consolidadas (0.5.0)
+
+Código: `src/domain/match.ts` (regras do jogo), `src/domain/stats.ts` (recortes e indicadores). Os testes usam cenários com números conferidos à mão (`stats.test.ts`, `match.test.ts`). Tudo vale só para registros **válidos** (pontos e ações anulados nunca entram).
+
+### Regras do placar (`match.ts`; as funções SQL do banco repetem as mesmas, conferidas em `supabase/tests/matches.test.sql`)
+
+- **Formato configurável** por partida: 1, 3 ou 5 sets; pontos do set (padrão 25); pontos do set decisivo (padrão 15; é o último set do formato quando há mais de um set); diferença mínima (padrão 2). Padrão inicial: melhor de 5, 25, decisivo até 15, diferença de 2. O formato trava quando o primeiro set é iniciado.
+- **Um set só fecha** com a pontuação nominal **e** a diferença mínima (25 a 24 continua; fecha em 26 a 24; sem teto). Fechar não depende do toque da pessoa: depende do placar. A **partida** nunca se encerra sozinha: a pessoa confirma e o resultado em sets é recalculado só dos sets fechados.
+- **Placar nunca é gravado**: é a contagem dos pontos ativos. Desfazer **anula** o último ponto (não apaga); o número dele é liberado e um set fechado volta a estar em andamento.
+- **Saque e rodízio** (calculados pelo backend, nunca aceitos do cliente): quem ganha o ponto saca o próximo; o Alpha7 só gira quando ganha um ponto que o adversário sacava; o sacador é o titular da posição `rotação` da formação inicial do set; a rotação recomeça a cada set.
+- **Não implementado (e a tela diz isso):** substituições e entrada automática do líbero (a formação mostrada é a inicial girando); corrigir o motivo de um ponto antigo (só se desfaz o último); erro de rodízio/posição.
+
+### Indicadores de ponto (da equipe, de pontos registrados nas partidas)
+
+| Métrica | Fórmula | Contexto exibido |
+|---|---|---|
+| Pontos do Alpha7 | pontos do Alpha7 ÷ pontos jogados | "6 de 10" |
+| **Side-out** | pontos ganhos com o **adversário sacando** ÷ pontos jogados com o adversário sacando | "2 de 4" |
+| **Ponto de saque (break point)** | pontos ganhos com o **Alpha7 sacando** ÷ pontos jogados com o Alpha7 sacando | "4 de 6" |
+| Por rotação | os mesmos, por rotação (0 a 5) em que o ponto **começou** | seis linhas, “sem dados” se vazia |
+
+A rotação conta desde a formação inicial de cada set: em sets com formações diferentes, a mesma rotação não é a mesma posição do levantador. Todas têm amostra sinalizada pelo denominador (menos de 10 = pequena).
+
+### Motivo do ponto x ação técnica (duas camadas que nunca se somam)
+
+- **Motivo do ponto** (opcional): Ace, Ataque vencedor, Bloqueio vencedor, Erro de saque, Erro de ataque, Erro de recepção, Erro do adversário/do Alpha7, Outro. Sempre do ponto de vista de quem ganhou; coerência validada (ace só de quem sacava; erro de saque só de quem sacava e perdeu; erro de recepção só de quem recebia e perdeu). Conta **pontos**.
+- **Ação técnica** (opcional, ligada a um ponto e a um atleta do Alpha7): a mesma taxonomia dos treinos (`fundamentals.ts`). Conta **tentativas observadas**. “Não registrado” nunca é zero.
+- Nenhuma conta soma as duas camadas: eficiência de ataque, taxa de ace etc. vêm **só** das ações técnicas, com as fórmulas da seção A aplicadas às ações (`StatEvent`: o mesmo código serve a treino e partida).
+
+### Estatísticas consolidadas (`stats.ts`, tela `/estatisticas`)
+
+- **Filtros:** período (treino pela data do treino; partida pela data marcada, ou a do cadastro), atleta, fundamento, treino, partida, rotação (só partidas). O filtro de atleta vale para fundamentos; os pontos são da equipe. Equipe: o workspace tem uma equipe só.
+- **Treino e partida ficam lado a lado**, nunca combinados num número só. A evolução no tempo mistura os dois só na linha do tempo, cada ponto com a origem.
+- **Indicador em % por fundamento** (gráficos): saque = taxa de ace; recepção = (A+B) ÷ recepções; levantamento = (excelente+atacável) ÷ levantamentos; ataque = pontos ÷ tentativas; bloqueio = pontos ÷ tentativas; defesa = positivas ÷ tentativas. Os cartões mostram também os indicadores principais da seção A (nota de recepção, eficiência de ataque).
+- **Comparação entre atletas:** só da mesma posição e com 2 ou mais de amostra adequada (≥ 10); nunca ranking entre posições.
+- **Período anterior:** mesmo número de dias, terminando na véspera. A diferença só aparece com as **duas** amostras adequadas; nota de recepção em pontos, os demais em pontos percentuais.
+- **Leitura individual:** compara o atleta com a média da equipe (que o inclui) **no mesmo contexto** (treino com treino, partida com partida), só com as duas amostras ≥ 10 e diferença ≥ 10 pontos percentuais (0,30 na nota de recepção: **escolha inicial a validar**). O texto só descreve números com tentativas; não há conclusão automática, e nada altera notas 1 a 99 nem o Overall.
+- **Dashboard:** com partidas reais cadastradas, “Partidas disputadas” e “Próxima partida” usam só elas (concluídas contam; vitória = mais sets); o resumo de demonstração só aparece sem partidas reais.
+
+### Decisões iniciais da 0.5.0 a validar
+
+14. Motivos do ponto e quando “não informado” é aceitável (hoje: sempre, o botão “Ponto” sem motivo existe para o banco).
+15. Limite de 10 pontos percentuais para citar diferença individual.
+16. Side-out/break por rotação sem distinguir a formação (5-1, 4-2, 6-2) nem a posição do levantador.
+17. Substituições e líbero ainda não registrados: indicadores de rotação assumem a formação inicial.

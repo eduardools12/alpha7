@@ -35,14 +35,14 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Avaliação | 9 atributos de 1 a 99, nova avaliação datada sem sobrescrever as anteriores, prévia do Overall e da variação | Feito |
 | Avaliação | Overall por posição com pesos provisórios editáveis em Configurações | Feito |
 | Escalação | Editor: 6 titulares, líbero, reservas, papel tático, ordem de saque base, prévia do rodízio, salvar, listar, excluir | Parcial |
-| Escalação | Gerador de arte (pôster, referência 05) | Planejado |
-| Dashboard | Indicadores de elenco e Overall médio, destaques e evolução (reais); treinos e partidas (demonstração) | Parcial |
+| Escalação | Gerador de arte (pôster, referência 05): partida, escalação salva, uniforme roxo/branco, cartaz 4:5 e story 9:16, prévia e PNG real; **só comissão técnica** | Feito (0.5.0) |
+| Dashboard | Indicadores de elenco e Overall médio, destaques e evolução (reais); treinos e partidas reais (com partidas cadastradas, o resumo de demonstração some) | Feito |
 | Treinos | Criar, editar, excluir e listar treinos (nome, data, duração, descrição, observações, responsável), participantes do elenco, vários exercícios, conclusão/reabertura | Feito (v0.2) |
 | Treinos | Registro rápido de tentativas por fundamento (saque, recepção, levantamento, ataque, bloqueio, defesa), com feedback, histórico recente e desfazer | Feito (v0.2) |
 | Treinos | Resumo pós-treino: estatísticas por fundamento com tentativas e denominadores, distribuição da recepção, eficiência de ataque, qualidade do levantamento, resultados individuais, comparação com limite de amostra | Feito (v0.2) |
 | Treinos | Intensidade da sessão, presença separada da lista de participantes, plano de treino (carga, objetivos) | Planejado |
-| Partidas | Placar por set, saque e rotação, rallies com motivo do ponto, correções com histórico | Planejado |
-| Estatísticas | Taxas de ace, ataque, side-out, bloqueio; recepção A/B/C/erro; comparação de atacantes; exportar relatório | Planejado |
+| Partidas | Cadastro/edição/lista com filtros, formato configurável, placar por set com saque e rotação, pontos com motivo opcional, atleta envolvido e ações técnicas opcionais, desfazer com histórico, encerrar com confirmação, reabrir (coach) | Feito (0.5.0). Sem substituições nem entrada automática do líbero |
+| Estatísticas | Consolidado de treinos e partidas com filtros (período, atleta, fundamento, treino, partida, rotação), side-out e ponto de saque por rotação, treino x partida lado a lado, gráficos, comparação por posição, período anterior, leitura individual | Feito (0.5.0). Exportar relatório continua planejado |
 | Dados | Persistência em localStorage, restaurar demonstração, apagar tudo (com painel de impacto, confirmação e desfazer) | Feito (provisório) |
 | Dados | Inicialização segura: sem workspace o app pergunta como começar (vazio, demonstração ou backup) ou abre a recuperação; nunca cria demonstração por conta própria | Feito (0.3.1). Não detecta toda perda de dados: ver DATA_SAFETY.md, seção 7 |
 | Dados | Backup em arquivo JSON com versão de formato e checksum; importação segura com prévia e confirmação; cópia automática antes de substituir; verificar integridade; lembrete de backup | Feito (v0.3). Ver `DATA_SAFETY.md` |
@@ -133,3 +133,11 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 
 - **Partidas:** placar respeita o formato da competição; cada ponto tem motivo (ou "não informado"); correção gera nova versão e preserva a anterior.
 - **Estatísticas:** todo percentual exibe "x de y"; sem tentativas, "indisponível".
+
+### Partidas, estatísticas e artes (0.5.0: verificados por testes automatizados; o banco, no PostgreSQL real)
+
+- [x] Regras de placar, saque, rotação e fechamento de set em `domain/match.ts`, com testes que simulam partidas inteiras; as mesmas regras em funções SQL, provadas no banco real (`supabase/tests/matches.test.sql`: papéis, RLS, idempotência, conflito, cascata).
+- [x] Acompanhamento ao vivo pelo celular (botões grandes, um toque por ponto, bloqueio de toque repetido, desfazer, últimos pontos, rotação em quadra); falha ao gravar nunca muda o placar.
+- [x] Estatísticas com denominadores, “Sem dados” ≠ 0, amostra pequena sinalizada, sem conclusões automáticas, separadas das notas 1 a 99.
+- [x] Gerador de artes só para a comissão técnica; PNG baixado de verdade, conferido em navegador (assinatura, 1080 x 1350 e 1080 x 1920, fundo roxo oficial).
+- [ ] **Pendente:** substituições e líbero automático; corrigir o motivo de ponto antigo; exportar relatório; mudar a escalação de um set em andamento; validar com a equipe os limites e critérios da seção D de `METRICS.md`; testar papéis analyst/viewer com contas reais no site publicado.

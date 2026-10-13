@@ -1,6 +1,6 @@
 import { screen, within } from '@testing-library/react';
 import { createEmptyWorkspace } from '@/data/demo';
-import { makePlayer } from '@/test/factories';
+import { makeMatch, makePlayer } from '@/test/factories';
 import { demoWorkspace, emptyWorkspace, renderApp } from '@/test/renderApp';
 
 const tile = (label: string) => screen.getByText(label).closest('div') as HTMLElement;
@@ -81,5 +81,36 @@ describe('Dashboard', () => {
   it('o banner de demonstração leva ao gerenciamento dos dados', async () => {
     renderApp({ workspace: demoWorkspace() });
     expect(await screen.findByRole('link', { name: 'Gerenciar dados' })).toHaveAttribute('href', '/configuracoes#dados');
+  });
+});
+
+describe('Dashboard com partidas reais', () => {
+  it('usa só as partidas cadastradas (sem a marca Demo) e esconde o resumo de demonstração', async () => {
+    const workspace = {
+      ...demoWorkspace(),
+      matches: [
+        makeMatch({ id: 'a', opponent: 'Time A', status: 'concluida', finalSetsUs: 3, finalSetsThem: 1, concludedAt: '2026-10-02T10:00:00.000Z' }),
+        makeMatch({ id: 'b', opponent: 'Time B', status: 'concluida', finalSetsUs: 0, finalSetsThem: 3, concludedAt: '2026-10-03T10:00:00.000Z' }),
+        makeMatch({ id: 'c', opponent: 'Time C', scheduledAt: '2026-11-20T19:30', venue: 'Ginásio', competition: 'Liga' }),
+      ],
+    };
+    renderApp({ workspace });
+    await screen.findByText('Partidas disputadas');
+    const played = tile('Partidas disputadas');
+    expect(within(played).getByText('2')).toBeInTheDocument();
+    expect(within(played).getByText(/50,0%: 1 de 2 vitórias/)).toBeInTheDocument();
+    expect(within(played).queryByText('Demo')).not.toBeInTheDocument();
+    expect(screen.getByText('Alpha7 vs. Time C')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Ver partida' })).toHaveAttribute('href', '/partidas/c');
+    expect(screen.queryByText(/Alpha7 vs\. /, { selector: 'p' })).toBeInTheDocument();
+  });
+
+  it('só partidas agendadas: nenhuma disputada ainda, e a contagem não vira 0%', async () => {
+    renderApp({ workspace: { ...createEmptyWorkspace(), players: [makePlayer({ id: 'x1', name: 'Ana Souza', jerseyNumber: 3 })], matches: [makeMatch({ id: 'a', opponent: 'Time A' })] } });
+    await screen.findByText('Partidas disputadas');
+    const played = tile('Partidas disputadas');
+    expect(within(played).getByText('0')).toBeInTheDocument();
+    expect(within(played).getByText('1 cadastrada, nenhuma concluída ainda')).toBeInTheDocument();
+    expect(within(played).queryByText(/%/)).not.toBeInTheDocument();
   });
 });

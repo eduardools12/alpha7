@@ -4,6 +4,7 @@ import { COURT_SLOTS, FORMATIONS, type Lineup, type LineupStarter } from '@/doma
 import { cloneWeights, DEFAULT_OVERALL_WEIGHTS, validatePositionWeights, type OverallWeights } from '@/domain/overall';
 import { PLAYER_STATUSES, UNIFORM_COLORS, type Evaluation, type Player } from '@/domain/player';
 import { isCourtRole, isPosition, POSITIONS } from '@/domain/positions';
+import { MATCH_STATUSES, RALLY_REASONS, SIDES, type Match, type MatchSet, type Rally, type RallyAction } from '@/domain/match';
 import { TRAINING_STATUSES, type Training, type TrainingEvent, type TrainingExercise } from '@/domain/training';
 import { RemoteDataError } from '../gateway';
 import type { Database } from './database.types';
@@ -297,3 +298,125 @@ export const eventToRow = (teamId: string, event: TrainingEvent): EventRow => ({
   voided_by: null,
   demo: event.demo,
 });
+
+/* ───────── partidas ───────── */
+export type MatchRow = Tables['matches']['Row'];
+export type MatchInsertRow = Tables['matches']['Insert'];
+export type SetRow = Tables['match_sets']['Row'];
+export type SetStarterRow = Tables['match_set_starters']['Row'];
+export type RallyRow = Tables['rallies']['Row'];
+export type RallyActionRow = Tables['rally_actions']['Row'];
+
+const isFormatSize = (value: number): value is 1 | 3 | 5 => value === 1 || value === 3 || value === 5;
+
+export function matchFromRow(row: MatchRow): Match {
+  if (!isFormatSize(row.best_of)) throw new RemoteDataError(`partida ${row.id}: formato de ${row.best_of} sets desconhecido`);
+  return {
+    id: row.id,
+    opponent: row.opponent,
+    competition: row.competition,
+    scheduledAt: row.scheduled_at,
+    venue: row.venue,
+    lineupId: row.lineup_id,
+    format: { bestOf: row.best_of, setPoints: row.set_points, decidingSetPoints: row.deciding_set_points, minLead: row.min_lead },
+    status: oneOf(MATCH_STATUSES, row.status, `partida ${row.id}`),
+    finalSetsUs: row.final_sets_us,
+    finalSetsThem: row.final_sets_them,
+    concludedAt: row.concluded_at === null ? null : toIso(row.concluded_at, `partida ${row.id}`),
+    createdAt: toIso(row.created_at, `partida ${row.id}`),
+    updatedAt: toIso(row.updated_at, `partida ${row.id}`),
+  };
+}
+
+/** Só as colunas que o banco deixa gravar direto: status e resultado mudam apenas pelas funções do banco. */
+export const matchToInsertRow = (teamId: string, match: Match): MatchInsertRow => ({
+  team_id: teamId,
+  id: match.id,
+  opponent: match.opponent,
+  competition: match.competition,
+  scheduled_at: match.scheduledAt,
+  venue: match.venue,
+  lineup_id: match.lineupId,
+  best_of: match.format.bestOf,
+  set_points: match.format.setPoints,
+  deciding_set_points: match.format.decidingSetPoints,
+  min_lead: match.format.minLead,
+  created_at: match.createdAt,
+  updated_at: match.updatedAt,
+});
+
+export const matchToUpdateRow = (match: Match) => ({
+  opponent: match.opponent,
+  competition: match.competition,
+  scheduled_at: match.scheduledAt,
+  venue: match.venue,
+  lineup_id: match.lineupId,
+  best_of: match.format.bestOf,
+  set_points: match.format.setPoints,
+  deciding_set_points: match.format.decidingSetPoints,
+  min_lead: match.format.minLead,
+  updated_at: match.updatedAt,
+});
+
+export function setFromRows(row: SetRow, starterRows: readonly SetStarterRow[]): MatchSet {
+  const starters = [...starterRows]
+    .sort((a, b) => a.slot - b.slot)
+    .map((s) => {
+      if (!isCourtRole(s.role)) throw new RemoteDataError(`set ${row.number}: papel "${s.role.slice(0, 30)}" desconhecido`);
+      return { slot: s.slot, playerId: s.player_id, role: s.role };
+    });
+  if (starters.length !== 6) throw new RemoteDataError(`set ${row.number} da partida ${row.match_id}: formação incompleta`);
+  return {
+    matchId: row.match_id,
+    number: row.number,
+    firstServer: oneOf(SIDES, row.first_server, `set ${row.number}`),
+    starters,
+    liberoId: row.libero_id,
+    createdAt: toIso(row.created_at, `set ${row.number}`),
+  };
+}
+
+export function rallyFromRow(row: RallyRow): Rally {
+  const reason = row.reason === null ? null : oneOf(RALLY_REASONS, row.reason, `ponto ${row.id}`);
+  return {
+    id: row.id,
+    matchId: row.match_id,
+    setNumber: row.set_number,
+    seq: row.seq,
+    servingSide: oneOf(SIDES, row.serving_side, `ponto ${row.id}`),
+    winnerSide: oneOf(SIDES, row.winner_side, `ponto ${row.id}`),
+    rotation: row.rotation,
+    serverPlayerId: row.server_player_id,
+    reason,
+    playerId: row.player_id,
+    attemptKey: row.attempt_key,
+    recordedAt: toIso(row.recorded_at, `ponto ${row.id}`),
+    voidedAt: row.voided_at === null ? null : toIso(row.voided_at, `ponto ${row.id}`),
+  };
+}
+
+export function rallyActionFromRow(row: RallyActionRow): RallyAction {
+  const result = toFundamentalResult(row.fundamental, row.outcome);
+  if (!result) throw new RemoteDataError(`ação ${row.id}: resultado "${row.outcome.slice(0, 30)}" não vale para ${row.fundamental.slice(0, 30)}`);
+  return {
+    ...result,
+    id: row.id,
+    matchId: row.match_id,
+    rallyId: row.rally_id,
+    playerId: row.player_id,
+    attemptKey: row.attempt_key,
+    recordedAt: toIso(row.recorded_at, `ação ${row.id}`),
+    voidedAt: row.voided_at === null ? null : toIso(row.voided_at, `ação ${row.id}`),
+  };
+}
+
+/**
+ * As funções do banco devolvem a linha como JSON. Confere que é um objeto com as colunas esperadas antes de usá-lo
+ * (resposta fora do formato vira RemoteDataError, nunca um valor mal formado dentro do aplicativo).
+ */
+export function jsonRow<K extends string>(value: unknown, keys: readonly K[], label: string): Record<K, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new RemoteDataError(`${label}: resposta inesperada do servidor`);
+  const record = value as Record<string, unknown>;
+  for (const key of keys) if (!(key in record)) throw new RemoteDataError(`${label}: falta "${key}" na resposta do servidor`);
+  return record as Record<K, unknown>;
+}

@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Fundamental } from '@/domain/fundamentals';
 import { newId } from '@/domain/id';
+import { matchState, validateMatchDraft, type Match, type MatchDraft, type MatchSet, type Rally, type RallyAction, type RallyReason, type SetStarter, type Side } from '@/domain/match';
 import {
   applyTrainingDraft,
   buildTrainingEvent,
@@ -21,6 +22,7 @@ import { createBackup, validateWorkspace, type WorkspaceSummary, type WorkspaceV
 import { readLastBackup, writeLastBackup, type LastBackup } from './backupMeta';
 import { createDemoWorkspace, createEmptyWorkspace } from './demo';
 import {
+  ConflictError,
   IntegrityError,
   PermissionDeniedError,
   RemoteDataError,
@@ -35,6 +37,7 @@ import {
   type StorageUsage,
 } from './gateway';
 import { LocalStorageGateway } from './localStorageGateway';
+import { findMatch as findMatchIn } from './matchOps';
 import type { Workspace } from './types';
 
 /**
@@ -104,6 +107,52 @@ export interface WorkspaceActions {
   recordTrainingEvent(input: RecordTrainingInput): Promise<TrainingEvent>;
   /** Desfaz (anula) um registro específico. Repetir a chamada é inofensivo. */
   undoTrainingEvent(eventId: string): Promise<void>;
+
+  /* ───────── partidas ───────── */
+
+  /** Cria (matchId null) ou edita os dados de uma partida. Status e resultado só mudam pelas ações abaixo. */
+  saveMatch(matchId: string | null, draft: MatchDraft): Promise<Match>;
+  /** Exclui a partida e, em cascata, sets, pontos e ações técnicas dela (só comissão técnica). */
+  deleteMatch(matchId: string): Promise<void>;
+  startMatchSet(matchId: string, input: StartMatchSetInput): Promise<MatchSet>;
+  /**
+   * Registra um ponto (e, opcionalmente, ações técnicas dele). Idempotente por attemptKey; se a tela estava atrasada
+   * (outra pessoa registrou antes), nada é gravado, os dados são recarregados e a ação falha com explicação.
+   */
+  recordRally(matchId: string, input: RecordRallyInput): Promise<Rally>;
+  /** Desfaz (anula) o último ponto da partida, do set atual. */
+  undoLastRally(matchId: string): Promise<void>;
+  cancelEmptySet(matchId: string, number: number): Promise<void>;
+  concludeMatch(matchId: string): Promise<Match>;
+  /** Reabre uma partida concluída para corrigi-la (só comissão técnica). */
+  reopenMatch(matchId: string): Promise<Match>;
+  addRallyAction(rallyId: string, input: RallyActionDraft): Promise<RallyAction>;
+  undoRallyAction(actionId: string): Promise<void>;
+}
+
+export interface StartMatchSetInput {
+  firstServer: Side;
+  starters: SetStarter[];
+  liberoId: string | null;
+}
+
+export interface RallyActionDraft {
+  playerId: string;
+  fundamental: Fundamental;
+  outcome: string;
+  /** Chave de idempotência da ação (uma por intenção da pessoa). */
+  attemptKey: string;
+}
+
+export interface RecordRallyInput {
+  setNumber: number;
+  /** Número do ponto que a tela espera registrar (detecta tela atrasada). */
+  expectedSeq: number;
+  winner: Side;
+  reason: RallyReason | null;
+  playerId: string | null;
+  attemptKey: string;
+  actions: RallyActionDraft[];
 }
 
 export interface RecordTrainingInput {
@@ -285,6 +334,26 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
       if (access.can(capability)) return;
       const role = access.role ? ROLE_LABEL[access.role] : '';
       throw new DomainRuleError(`Seu papel (${role}) não permite ${CAPABILITY_LABEL[capability]}.`);
+    };
+
+    /**
+     * Trabalho de partida: se a tela estava atrasada (ConflictError), nada foi gravado; recarrega os dados da fonte e
+     * explica, para a pessoa olhar o placar atual antes de repetir.
+     */
+    const matchWork = async <T,>(work: () => Promise<T>): Promise<T> => {
+      try {
+        return await work();
+      } catch (error) {
+        if (error instanceof ConflictError) {
+          try {
+            applyLoaded(await gw.load());
+          } catch {
+            /* sem conexão agora: a mensagem abaixo já diz que nada foi gravado */
+          }
+          throw new DomainRuleError(error.message);
+        }
+        throw error;
+      }
     };
 
     /** Troca o workspace inteiro. A cópia de segurança é feita pelo gateway antes de gravar. */
@@ -490,6 +559,161 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
             trainingEvents: prev.trainingEvents.map((e) => (e.id === eventId && e.voidedAt === null ? { ...e, voidedAt } : e)),
           }));
         });
+      },
+
+      async saveMatch(matchId, draft) {
+        return guarded(async () => {
+          allow('matches:write');
+          const checked = validateMatchDraft(draft);
+          if (!checked.ok) throw new DomainRuleError(Object.values(checked.errors)[0] ?? 'Dados da partida inválidos.');
+          const current = latest.current;
+          const existing = matchId ? (current.matches.find((m) => m.id === matchId) ?? null) : null;
+          if (matchId && !existing) throw new DomainRuleError('Esta partida não existe mais.');
+          const now = new Date().toISOString();
+          const next: Match = existing
+            ? { ...existing, ...checked.value, updatedAt: now }
+            : { ...checked.value, id: newId('match'), status: 'agendada', finalSetsUs: null, finalSetsThem: null, concludedAt: null, createdAt: now, updatedAt: now };
+          const saved = await gw.saveMatch(next);
+          setData((prev) => ({
+            ...prev,
+            matches: prev.matches.some((m) => m.id === saved.id) ? prev.matches.map((m) => (m.id === saved.id ? saved : m)) : [...prev.matches, saved],
+          }));
+          return saved;
+        });
+      },
+
+      async deleteMatch(matchId) {
+        await guarded(async () => {
+          allow('matches:delete');
+          await gw.deleteMatch(matchId);
+          setData((prev) => ({
+            ...prev,
+            matches: prev.matches.filter((m) => m.id !== matchId),
+            matchSets: prev.matchSets.filter((s) => s.matchId !== matchId),
+            rallies: prev.rallies.filter((r) => r.matchId !== matchId),
+            rallyActions: prev.rallyActions.filter((a) => a.matchId !== matchId),
+          }));
+          await refreshSnapshot(); // a exclusão local guardou uma cópia de segurança
+        });
+      },
+
+      async startMatchSet(matchId, input) {
+        return guarded(() =>
+          matchWork(async () => {
+            allow('matches:write');
+            const state = matchState(findMatchIn(latest.current, matchId), latest.current.matchSets, latest.current.rallies);
+            const number = state.nextSetNumber ?? (state.current ? state.current.set.number + 1 : 1);
+            const { set, match } = await gw.startSet(matchId, { number, ...input, createdAt: new Date().toISOString() });
+            setData((prev) => ({
+              ...prev,
+              matches: prev.matches.map((m) => (m.id === match.id ? match : m)),
+              matchSets: [...prev.matchSets.filter((s) => !(s.matchId === set.matchId && s.number === set.number)), set],
+            }));
+            return set;
+          }),
+        );
+      },
+
+      async recordRally(matchId, input) {
+        return guarded(() =>
+          matchWork(async () => {
+            allow('matches:write');
+            const recordedAt = new Date().toISOString();
+            const result = await gw.recordRally(matchId, {
+              id: newId('rally'),
+              attemptKey: input.attemptKey,
+              setNumber: input.setNumber,
+              expectedSeq: input.expectedSeq,
+              winner: input.winner,
+              reason: input.reason,
+              playerId: input.playerId,
+              recordedAt,
+              actions: input.actions.map((a) => ({ id: newId('ract'), attemptKey: a.attemptKey, playerId: a.playerId, fundamental: a.fundamental, outcome: a.outcome })),
+            });
+            setData((prev) =>
+              prev.rallies.some((r) => r.id === result.rally.id)
+                ? prev
+                : { ...prev, rallies: [...prev.rallies, result.rally], rallyActions: [...prev.rallyActions, ...result.actions.filter((a) => !prev.rallyActions.some((x) => x.id === a.id))] },
+            );
+            return result.rally;
+          }),
+        );
+      },
+
+      async undoLastRally(matchId) {
+        await guarded(() =>
+          matchWork(async () => {
+            allow('matches:write');
+            const state = matchState(findMatchIn(latest.current, matchId), latest.current.matchSets, latest.current.rallies);
+            if (!state.lastRally) throw new DomainRuleError('Não há ponto para desfazer.');
+            const rally = state.lastRally;
+            const voidedAt = new Date().toISOString();
+            await gw.voidLastRally(matchId, rally.id, voidedAt);
+            setData((prev) => ({
+              ...prev,
+              rallies: prev.rallies.map((r) => (r.id === rally.id ? { ...r, voidedAt } : r)),
+              rallyActions: prev.rallyActions.map((a) => (a.rallyId === rally.id && a.voidedAt === null ? { ...a, voidedAt } : a)),
+            }));
+          }),
+        );
+      },
+
+      async cancelEmptySet(matchId, number) {
+        await guarded(() =>
+          matchWork(async () => {
+            allow('matches:write');
+            const match = await gw.cancelEmptySet(matchId, number);
+            setData((prev) => ({
+              ...prev,
+              matches: prev.matches.map((m) => (m.id === match.id ? match : m)),
+              matchSets: prev.matchSets.filter((s) => !(s.matchId === matchId && s.number === number)),
+            }));
+          }),
+        );
+      },
+
+      async concludeMatch(matchId) {
+        return guarded(() =>
+          matchWork(async () => {
+            allow('matches:write');
+            const match = await gw.concludeMatch(matchId, new Date().toISOString());
+            setData((prev) => ({ ...prev, matches: prev.matches.map((m) => (m.id === match.id ? match : m)) }));
+            return match;
+          }),
+        );
+      },
+
+      async reopenMatch(matchId) {
+        return guarded(() =>
+          matchWork(async () => {
+            allow('matches:reopen');
+            const match = await gw.reopenMatch(matchId);
+            setData((prev) => ({ ...prev, matches: prev.matches.map((m) => (m.id === match.id ? match : m)) }));
+            return match;
+          }),
+        );
+      },
+
+      async addRallyAction(rallyId, input) {
+        return guarded(() =>
+          matchWork(async () => {
+            allow('matches:write');
+            const action = await gw.addRallyAction({ id: newId('ract'), rallyId, ...input, recordedAt: new Date().toISOString() });
+            setData((prev) => (prev.rallyActions.some((a) => a.id === action.id) ? prev : { ...prev, rallyActions: [...prev.rallyActions, action] }));
+            return action;
+          }),
+        );
+      },
+
+      async undoRallyAction(actionId) {
+        await guarded(() =>
+          matchWork(async () => {
+            allow('matches:write');
+            const voidedAt = new Date().toISOString();
+            await gw.voidRallyAction(actionId, voidedAt);
+            setData((prev) => ({ ...prev, rallyActions: prev.rallyActions.map((a) => (a.id === actionId && a.voidedAt === null ? { ...a, voidedAt } : a)) }));
+          }),
+        );
       },
 
       // Mantém os pesos do Overall: são configuração da equipe, não dados de demonstração.

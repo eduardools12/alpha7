@@ -1,0 +1,111 @@
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: var(--s-3);
+  margin: 0;
+}
+
+.facts dt {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.facts dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.facts .small {
+  font-family: var(--font-ui);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.subtitle {
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--s-2) var(--s-3);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table thead th {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.lineup {
+  min-width: 18rem;
+  color: var(--text-muted);
+}
+
+.reasonGrid {
+  display: grid;
+  gap: var(--s-4);
+}
+
+@media (min-width: 48rem) {
+  .reasonGrid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.reasonList,
+.fundamentals,
+.points {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: var(--s-2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reasonList li,
+.points li {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+}
+
+.points li {
+  justify-content: flex-start;
+}
+
+.points li > span:first-child {
+  min-width: 4.5rem;
+  font-weight: 700;
+}
+
+.history summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-weight: 650;
+}

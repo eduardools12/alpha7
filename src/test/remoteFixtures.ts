@@ -12,6 +12,7 @@ import {
   weightsToRows,
 } from '@/data/supabase/mappers';
 import type { Workspace } from '@/data/types';
+import { matchTableRows } from './fakeMatchRpc';
 import { FakeSupabase, type FakeAuthUser } from './fakeSupabase';
 
 export const TEAM_A = 'team-a';
@@ -53,6 +54,7 @@ export function seedWorkspace(fake: FakeSupabase, teamId: string, workspace: Par
   fake.seed('training_participants', ws.trainings.flatMap((t) => participantRows(teamId, t).map((r) => ({ ...r }))));
   fake.seed('training_exercises', ws.exercises.map((e) => ({ ...exerciseToRow(teamId, e) })));
   fake.seed('training_events', ws.trainingEvents.map((e) => ({ ...eventToRow(teamId, e) })));
+  for (const [table, rows] of Object.entries(matchTableRows(teamId, ws))) fake.seed(table, rows);
   return fake;
 }
 

@@ -181,6 +181,165 @@ export type Database = {
           },
         ];
       };
+      match_set_starters: {
+        Row: {
+          match_id: string;
+          player_id: string;
+          role: string;
+          set_number: number;
+          slot: number;
+          team_id: string;
+        };
+        Insert: {
+          match_id: string;
+          player_id: string;
+          role: string;
+          set_number: number;
+          slot: number;
+          team_id: string;
+        };
+        Update: {
+          match_id?: string;
+          player_id?: string;
+          role?: string;
+          set_number?: number;
+          slot?: number;
+          team_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'match_set_starters_team_id_match_id_set_number_fkey';
+            columns: ['team_id', 'match_id', 'set_number'];
+            isOneToOne: false;
+            referencedRelation: 'match_sets';
+            referencedColumns: ['team_id', 'match_id', 'number'];
+          },
+          {
+            foreignKeyName: 'match_set_starters_team_id_player_id_fkey';
+            columns: ['team_id', 'player_id'];
+            isOneToOne: false;
+            referencedRelation: 'players';
+            referencedColumns: ['team_id', 'id'];
+          },
+        ];
+      };
+      match_sets: {
+        Row: {
+          created_at: string;
+          first_server: string;
+          libero_id: string | null;
+          match_id: string;
+          number: number;
+          team_id: string;
+        };
+        Insert: {
+          created_at: string;
+          first_server: string;
+          libero_id?: string | null;
+          match_id: string;
+          number: number;
+          team_id: string;
+        };
+        Update: {
+          created_at?: string;
+          first_server?: string;
+          libero_id?: string | null;
+          match_id?: string;
+          number?: number;
+          team_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'match_sets_team_id_libero_id_fkey';
+            columns: ['team_id', 'libero_id'];
+            isOneToOne: false;
+            referencedRelation: 'players';
+            referencedColumns: ['team_id', 'id'];
+          },
+          {
+            foreignKeyName: 'match_sets_team_id_match_id_fkey';
+            columns: ['team_id', 'match_id'];
+            isOneToOne: false;
+            referencedRelation: 'matches';
+            referencedColumns: ['team_id', 'id'];
+          },
+        ];
+      };
+      matches: {
+        Row: {
+          best_of: number;
+          competition: string;
+          concluded_at: string | null;
+          created_at: string;
+          deciding_set_points: number;
+          final_sets_them: number | null;
+          final_sets_us: number | null;
+          id: string;
+          lineup_id: string | null;
+          min_lead: number;
+          opponent: string;
+          scheduled_at: string;
+          set_points: number;
+          status: string;
+          team_id: string;
+          updated_at: string;
+          venue: string;
+        };
+        Insert: {
+          best_of?: number;
+          competition?: string;
+          concluded_at?: string | null;
+          created_at: string;
+          deciding_set_points?: number;
+          final_sets_them?: number | null;
+          final_sets_us?: number | null;
+          id: string;
+          lineup_id?: string | null;
+          min_lead?: number;
+          opponent: string;
+          scheduled_at?: string;
+          set_points?: number;
+          status?: string;
+          team_id: string;
+          updated_at: string;
+          venue?: string;
+        };
+        Update: {
+          best_of?: number;
+          competition?: string;
+          concluded_at?: string | null;
+          created_at?: string;
+          deciding_set_points?: number;
+          final_sets_them?: number | null;
+          final_sets_us?: number | null;
+          id?: string;
+          lineup_id?: string | null;
+          min_lead?: number;
+          opponent?: string;
+          scheduled_at?: string;
+          set_points?: number;
+          status?: string;
+          team_id?: string;
+          updated_at?: string;
+          venue?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'matches_team_id_fkey';
+            columns: ['team_id'];
+            isOneToOne: false;
+            referencedRelation: 'teams';
+            referencedColumns: ['id'];
+          },
+          {
+            foreignKeyName: 'matches_team_id_lineup_id_fkey';
+            columns: ['team_id', 'lineup_id'];
+            isOneToOne: false;
+            referencedRelation: 'lineups';
+            referencedColumns: ['team_id', 'id'];
+          },
+        ];
+      };
       overall_weights: {
         Row: {
           ata: number;
@@ -281,6 +440,139 @@ export type Database = {
             isOneToOne: false;
             referencedRelation: 'teams';
             referencedColumns: ['id'];
+          },
+        ];
+      };
+      rallies: {
+        Row: {
+          attempt_key: string;
+          id: string;
+          match_id: string;
+          player_id: string | null;
+          reason: string | null;
+          recorded_at: string;
+          rotation: number;
+          seq: number;
+          server_player_id: string | null;
+          serving_side: string;
+          set_number: number;
+          team_id: string;
+          voided_at: string | null;
+          voided_by: string | null;
+          winner_side: string;
+        };
+        Insert: {
+          attempt_key: string;
+          id: string;
+          match_id: string;
+          player_id?: string | null;
+          reason?: string | null;
+          recorded_at: string;
+          rotation: number;
+          seq: number;
+          server_player_id?: string | null;
+          serving_side: string;
+          set_number: number;
+          team_id: string;
+          voided_at?: string | null;
+          voided_by?: string | null;
+          winner_side: string;
+        };
+        Update: {
+          attempt_key?: string;
+          id?: string;
+          match_id?: string;
+          player_id?: string | null;
+          reason?: string | null;
+          recorded_at?: string;
+          rotation?: number;
+          seq?: number;
+          server_player_id?: string | null;
+          serving_side?: string;
+          set_number?: number;
+          team_id?: string;
+          voided_at?: string | null;
+          voided_by?: string | null;
+          winner_side?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rallies_team_id_match_id_set_number_fkey';
+            columns: ['team_id', 'match_id', 'set_number'];
+            isOneToOne: false;
+            referencedRelation: 'match_sets';
+            referencedColumns: ['team_id', 'match_id', 'number'];
+          },
+          {
+            foreignKeyName: 'rallies_team_id_player_id_fkey';
+            columns: ['team_id', 'player_id'];
+            isOneToOne: false;
+            referencedRelation: 'players';
+            referencedColumns: ['team_id', 'id'];
+          },
+          {
+            foreignKeyName: 'rallies_team_id_server_player_id_fkey';
+            columns: ['team_id', 'server_player_id'];
+            isOneToOne: false;
+            referencedRelation: 'players';
+            referencedColumns: ['team_id', 'id'];
+          },
+        ];
+      };
+      rally_actions: {
+        Row: {
+          attempt_key: string;
+          fundamental: string;
+          id: string;
+          match_id: string;
+          outcome: string;
+          player_id: string;
+          rally_id: string;
+          recorded_at: string;
+          team_id: string;
+          voided_at: string | null;
+          voided_by: string | null;
+        };
+        Insert: {
+          attempt_key: string;
+          fundamental: string;
+          id: string;
+          match_id: string;
+          outcome: string;
+          player_id: string;
+          rally_id: string;
+          recorded_at: string;
+          team_id: string;
+          voided_at?: string | null;
+          voided_by?: string | null;
+        };
+        Update: {
+          attempt_key?: string;
+          fundamental?: string;
+          id?: string;
+          match_id?: string;
+          outcome?: string;
+          player_id?: string;
+          rally_id?: string;
+          recorded_at?: string;
+          team_id?: string;
+          voided_at?: string | null;
+          voided_by?: string | null;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'rally_actions_team_id_match_id_rally_id_fkey';
+            columns: ['team_id', 'match_id', 'rally_id'];
+            isOneToOne: false;
+            referencedRelation: 'rallies';
+            referencedColumns: ['team_id', 'match_id', 'id'];
+          },
+          {
+            foreignKeyName: 'rally_actions_team_id_player_id_fkey';
+            columns: ['team_id', 'player_id'];
+            isOneToOne: false;
+            referencedRelation: 'players';
+            referencedColumns: ['team_id', 'id'];
           },
         ];
       };
@@ -489,8 +781,16 @@ export type Database = {
     };
     Views: { [_ in never]: never };
     Functions: {
+      add_rally_action: { Args: { p_action: Json; p_team: string }; Returns: Json };
       add_team_member: { Args: { p_email: string; p_role: string; p_team: string }; Returns: undefined };
+      cancel_empty_set: { Args: { p_match: string; p_number: number; p_team: string }; Returns: undefined };
+      conclude_match: { Args: { p_match: string; p_team: string }; Returns: Json };
       create_team: { Args: { p_name: string }; Returns: string };
+      record_rally: { Args: { p_match: string; p_rally: Json; p_team: string }; Returns: Json };
+      reopen_match: { Args: { p_match: string; p_team: string }; Returns: Json };
+      start_set: { Args: { p_match: string; p_set: Json; p_team: string }; Returns: undefined };
+      void_last_rally: { Args: { p_match: string; p_rally: string; p_team: string }; Returns: undefined };
+      void_rally_action: { Args: { p_action: string; p_team: string }; Returns: undefined };
     };
     Enums: { [_ in never]: never };
     CompositeTypes: { [_ in never]: never };

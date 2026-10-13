@@ -1,9 +1,13 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { RequireCapability } from '@/auth/AccessContext';
 import { DashboardPage } from '@/features/dashboard/DashboardPage';
 import { LineupEditorPage } from '@/features/lineup/LineupEditorPage';
 import { LineupListPage } from '@/features/lineup/LineupListPage';
-import { MatchesPage, StatsPage } from '@/features/placeholders/ComingSoonPage';
+import { MatchDetailPage } from '@/features/matches/MatchDetailPage';
+import { MatchFormPage } from '@/features/matches/MatchFormPage';
+import { MatchLivePage } from '@/features/matches/MatchLivePage';
+import { MatchesListPage } from '@/features/matches/MatchesListPage';
 import { NotFoundPage } from '@/features/placeholders/NotFoundPage';
 import { EvaluationPage } from '@/features/roster/EvaluationPage';
 import { PlayerFormPage } from '@/features/roster/PlayerFormPage';
@@ -14,6 +18,10 @@ import { TrainingFormPage } from '@/features/trainings/TrainingFormPage';
 import { TrainingRecordPage } from '@/features/trainings/TrainingRecordPage';
 import { TrainingSummaryPage } from '@/features/trainings/TrainingSummaryPage';
 import { TrainingsListPage } from '@/features/trainings/TrainingsListPage';
+// O gerador carrega fontes e logo embutidos: só é baixado quando a comissão técnica abre a página.
+const StatsPage = lazy(() => import('@/features/stats/StatsPage').then((m) => ({ default: m.StatsPage })));
+const ArtsPage = lazy(() => import('@/features/arts/ArtsPage').then((m) => ({ default: m.ArtsPage })));
+
 import { AppLayout } from './AppLayout';
 import { BackendRoot } from './BackendRoot';
 import { RouteEffects } from './RouteEffects';
@@ -39,8 +47,13 @@ export function AppRoutes() {
           <Route path="treinos/:trainingId" element={<TrainingSummaryPage />} />
           <Route path="treinos/:trainingId/editar" element={<RequireCapability capability="trainings:write"><TrainingFormPage /></RequireCapability>} />
           <Route path="treinos/:trainingId/registrar" element={<RequireCapability capability="events:record"><TrainingRecordPage /></RequireCapability>} />
-          <Route path="partidas" element={<MatchesPage />} />
-          <Route path="estatisticas" element={<StatsPage />} />
+          <Route path="partidas" element={<MatchesListPage />} />
+          <Route path="partidas/nova" element={<RequireCapability capability="matches:write"><MatchFormPage /></RequireCapability>} />
+          <Route path="partidas/:matchId" element={<MatchDetailPage />} />
+          <Route path="partidas/:matchId/editar" element={<RequireCapability capability="matches:write"><MatchFormPage /></RequireCapability>} />
+          <Route path="partidas/:matchId/acompanhar" element={<RequireCapability capability="matches:write"><MatchLivePage /></RequireCapability>} />
+          <Route path="estatisticas" element={<Suspense fallback={<p role="status">Carregando…</p>}><StatsPage /></Suspense>} />
+          <Route path="artes" element={<RequireCapability capability="arts:generate"><Suspense fallback={<p role="status">Carregando…</p>}><ArtsPage /></Suspense></RequireCapability>} />
           <Route path="configuracoes" element={<SettingsPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Route>

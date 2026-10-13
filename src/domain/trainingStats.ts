@@ -1,4 +1,4 @@
-import { FUNDAMENTALS, type Fundamental, type OutcomeFor } from './fundamentals';
+import { FUNDAMENTALS, type Fundamental, type FundamentalResult, type OutcomeFor } from './fundamentals';
 import { formatPercent, ratio, UNAVAILABLE, type Ratio } from './metrics';
 import { validEvents, type Training, type TrainingEvent, type TrainingExercise } from './training';
 
@@ -20,9 +20,18 @@ export function sampleLevel(attempts: number): SampleLevel {
   return attempts < MIN_SAMPLE ? 'small' : 'adequate';
 }
 
-type EventOf<F extends Fundamental> = Extract<TrainingEvent, { fundamental: F }>;
+/**
+ * O mínimo que uma estatística de fundamento precisa de um registro: fundamento + resultado coerentes e o carimbo de
+ * anulação. Eventos de TREINO e ações técnicas de PARTIDA têm esta forma; as funções abaixo servem aos dois, mas quem
+ * chama nunca mistura as duas origens numa mesma conta (docs/METRICS.md).
+ */
+export type StatEvent = FundamentalResult & { voidedAt: string | null };
+/** Registro de um atleta (treino ou partida): permite filtrar e comparar por atleta. */
+export type PlayerStatEvent = StatEvent & { playerId: string };
 
-function select<F extends Fundamental>(events: readonly TrainingEvent[], fundamental: F): EventOf<F>[] {
+type EventOf<F extends Fundamental> = Extract<StatEvent, { fundamental: F }>;
+
+function select<F extends Fundamental>(events: readonly StatEvent[], fundamental: F): EventOf<F>[] {
   return validEvents(events).filter((e): e is EventOf<F> => e.fundamental === fundamental);
 }
 
@@ -61,7 +70,7 @@ export interface ServeStats {
   sample: SampleLevel;
 }
 
-export function serveStats(events: readonly TrainingEvent[]): ServeStats {
+export function serveStats(events: readonly StatEvent[]): ServeStats {
   const own = select(events, 'saque');
   const counts = tally(own, ['ace', 'valido', 'erro']);
   const attempts = own.length;
@@ -95,7 +104,7 @@ export interface ReceptionStats {
   sample: SampleLevel;
 }
 
-export function receptionStats(events: readonly TrainingEvent[]): ReceptionStats {
+export function receptionStats(events: readonly StatEvent[]): ReceptionStats {
   const own = select(events, 'recepcao');
   const counts = tally(own, ['A', 'B', 'C', 'erro']);
   const attempts = own.length;
@@ -123,7 +132,7 @@ export interface SettingStats {
   sample: SampleLevel;
 }
 
-export function settingStats(events: readonly TrainingEvent[]): SettingStats {
+export function settingStats(events: readonly StatEvent[]): SettingStats {
   const own = select(events, 'levantamento');
   const counts = tally(own, ['excelente', 'atacavel', 'quebrado', 'erro']);
   const attempts = own.length;
@@ -153,7 +162,7 @@ export interface AttackStats {
   sample: SampleLevel;
 }
 
-export function attackStats(events: readonly TrainingEvent[]): AttackStats {
+export function attackStats(events: readonly StatEvent[]): AttackStats {
   const own = select(events, 'ataque');
   const counts = tally(own, ['ponto', 'erro', 'bloqueado', 'outra']);
   const attempts = own.length;
@@ -185,7 +194,7 @@ export interface BlockStats {
   sample: SampleLevel;
 }
 
-export function blockStats(events: readonly TrainingEvent[]): BlockStats {
+export function blockStats(events: readonly StatEvent[]): BlockStats {
   const own = select(events, 'bloqueio');
   const counts = tally(own, ['ponto', 'sem_ponto', 'erro']);
   const attempts = own.length;
@@ -215,7 +224,7 @@ export interface DefenseStats {
   sample: SampleLevel;
 }
 
-export function defenseStats(events: readonly TrainingEvent[]): DefenseStats {
+export function defenseStats(events: readonly StatEvent[]): DefenseStats {
   const own = select(events, 'defesa');
   const counts = tally(own, ['positiva', 'recuperada', 'erro']);
   const attempts = own.length;
@@ -271,7 +280,7 @@ const ratioHeadline = (fundamental: Fundamental, label: string, r: Ratio, sample
 });
 
 /** Um indicador principal por fundamento, usado em resumos, comparações e no perfil. */
-export function headline(fundamental: Fundamental, events: readonly TrainingEvent[]): Headline {
+export function headline(fundamental: Fundamental, events: readonly StatEvent[]): Headline {
   switch (fundamental) {
     case 'saque': {
       const s = serveStats(events);
@@ -341,7 +350,7 @@ export interface Comparison {
  * entre atletas com amostra adequada; os demais aparecem depois, marcados como insuficientes.
  */
 export function compareParticipants(
-  events: readonly TrainingEvent[],
+  events: readonly PlayerStatEvent[],
   playerIds: readonly string[],
   fundamental: Fundamental,
 ): Comparison {

@@ -1,0 +1,139 @@
+.filters {
+  display: grid;
+  gap: var(--s-3);
+  align-items: end;
+}
+
+@media (min-width: 48rem) {
+  .filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .chips {
+    grid-column: 1 / -1;
+  }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.count {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(21rem, 1fr));
+  gap: var(--s-4);
+}
+
+.card {
+  height: 100%;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+  min-width: 0;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.planned {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.live {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.done {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.meta {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.result {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s-2);
+}
+
+.result strong {
+  font-family: var(--font-display);
+  font-size: 1.6rem;
+  line-height: 1.1;
+}
+
+.outcome {
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+}
+
+.vitoria {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.derrota {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.empate {
+  background: var(--info-bg);
+  color: var(--info);
+}
+
+.format {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: auto;
+}
+
+.confirm {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.footnote {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}

@@ -30,11 +30,14 @@ As referências são especificação, não assets. Diferenças deliberadas: `DES
 /treinos                Lista de treinos ── /treinos/novo (criar)
   /treinos/:id          Resumo pós-treino ── /treinos/:id/editar
                                             └ /treinos/:id/registrar (registro rápido)
-/partidas  /estatisticas   Em desenvolvimento
+/partidas              Lista de partidas ── /partidas/nova, /partidas/:id (detalhes) ── /partidas/:id/editar
+                                          └ /partidas/:id/acompanhar (placar ao vivo)
+/estatisticas           Estatísticas consolidadas
+/artes                  Gerador de artes (só comissão técnica)
 /configuracoes          Conta e equipe (#conta, só com Supabase), backup (#backup), dados e armazenamento (#dados), pesos do Overall, identidade
 ```
 
-Menu lateral (≥ 960px) e barra inferior (< 960px; "Mais" abre Partidas, Estatísticas e Configurações).
+Menu lateral (≥ 960px) e barra inferior (< 960px; "Mais" abre Partidas, Estatísticas, Gerador de artes (só coach) e Configurações).
 
 ## 01 · Dashboard (`/`)
 
@@ -69,9 +72,9 @@ Menu lateral (≥ 960px) e barra inferior (< 960px; "Mais" abre Partidas, Estat�
 **Ações:** selecionar zona, escolher atleta (move ou troca, nunca duplica), remover da zona, trocar papel tático, definir líbero, marcar reservas, girar prévia, salvar. **Gerar arte** aparece desativado ("em breve").
 **Lista** (`/escalacoes`): cartões com formação, titulares, reservas e líbero; abrir; excluir com confirmação.
 
-## 05 · Pôster da escalação (não implementado)
+## 05 · Gerador de artes (`/artes`, só comissão técnica; 0.5.0)
 
-Arte vertical gerada de uma escalação salva (título "Escalação oficial", confronto, local, seis titulares na quadra, líbero, reservas). Depende do gerador de artes (próxima etapa de mídia). Nada a navegar ainda. Quando existir: gerar a partir de `/escalacoes/:id`, exportar imagem, sem fotos de terceiros.
+Escolhas: partida, escalação salva (começa pela ligada à partida), uniforme (roxo/branco) e formato (cartaz 4:5, story 9:16). A prévia é o **mesmo SVG** que vira o PNG (1080 x 1350 ou 1080 x 1920): logo A7 oficial, “Alpha7”, “Escalação Oficial”, adversário/data/competição/local (o que não foi cadastrado não aparece), quadra estilizada com os seis titulares (camisa, nome, posição e P1 a P6), líbero e reservas, paleta #270949, branco, grafite e lilás. Sem rostos, sem fotos, sem imagem de referência, sem IA: desenho determinístico. “Baixar PNG” gera o arquivo no navegador (nome `alpha7-escalacao-<adversario>-<cartaz|story>.png`). Estados: sem partidas (convida a cadastrar), escalação incompleta (explica e desativa o botão), falha ao gerar (mensagem). Item de menu e rota existem só para o coach; analista e leitor veem a explicação ao abrir o endereço. Diferenças da referência: sem foto de atleta.
 
 ## 06 · Registrar treino (`/treinos/:id/registrar`, celular primeiro)
 
@@ -89,13 +92,13 @@ Arte vertical gerada de uma escalação salva (título "Escalação oficial", co
 - **Criar/editar** (`/treinos/novo`, `/treinos/:id/editar`): nome, data, duração, responsável, descrição, observações; participantes do elenco (ativos pré-selecionados no novo treino); exercícios (nome e fundamento em foco). Na edição, exercício ou participante com registros fica bloqueado para remoção, com o motivo.
 - **Resumo** (`/treinos/:id`): identificação, números do treino, participantes, **estatísticas por fundamento** (distribuição, indicadores com fórmula e denominador, aviso de amostra insuficiente), exercícios com registros, **resultados individuais** com escolha de fundamento e comparação só quando há base, observações do responsável, concluir/reabrir, excluir. Fundamentos sem tentativas aparecem listados como "sem tentativas", sem cartão de zeros.
 
-## 07 · Estatísticas (não implementado)
+## 07 · Estatísticas (`/estatisticas`; 0.5.0)
 
-Objetivo: analisar desempenho. Previstos: taxa de ace, eficiência de ataque, sucesso no side-out e eficiência de bloqueio (cada um com "x de y"); evolução dos treinos; qualidade de recepção empilhada; comparação de atacantes; exportar relatório. Fórmulas em `METRICS.md`. Rota atual `/estatisticas` informa o plano.
+Filtros (período, atleta, fundamento, treino, partida, rotação, comparar com o período anterior) e resumo do recorte. Seções: **Partidas: como os pontos saem** (pontos, side-out, ponto de saque com “x de y” e amostra, motivos, gráfico por rotação e evolução por partida); **Fundamentos observados** (por fundamento, treinos e partidas lado a lado, “Sem dados” quando não há tentativas); **Gráficos** (treino x partida, distribuição A/B/C/erro da recepção, evolução no tempo, atletas da mesma posição); comparação com o período anterior; **visão individual** ao escolher um atleta (leitura descritiva, tabela por fundamento, resultado em cada partida). Todo gráfico tem tabela equivalente em texto. Fórmulas em `METRICS.md` seção D. Não há exportar relatório.
 
-## 08 · Central de partidas (celular; não implementado)
+## 08 · Central de partidas (`/partidas/:id/acompanhar`, celular primeiro; 0.5.0)
 
-Objetivo: conduzir o placar de uma partida. Previstos: placar do set com saque e rotação; botões de ponto com origem (ace, ataque, bloqueio, erro adversário) e atleta envolvido; substituição; ver escalação e rotação; desfazer ponto; últimos rallies. Rota atual `/partidas` informa o plano.
+Placar do set (sets ganhos, saque, pontos, “até 25, diferença de 2”); iniciar o set (formação P1 a P6 pela escalação salva ou pelo set anterior, líbero, quem saca primeiro); “Ponto do Alpha7”/“Ponto do adversário” com os motivos possíveis **no estado atual** (ace só para quem saca etc.); atleta envolvido opcional (vale só para o próximo ponto); “Desfazer último ponto” (também reabre set fechado); detalhar o último ponto com ação técnica; rotação em quadra com sacador e posição do levantador; últimos pontos; cancelar o início de um set vazio; encerrar partida com confirmação. Lista (`/partidas`), formulário, detalhes (sets, motivos com denominador, ações técnicas, histórico). Papéis: viewer só vê lista e detalhes; analyst acompanha e edita; coach também exclui e reabre. Limitação: sem substituições (mostrado na própria tela).
 
 ## Telas não presentes nas referências
 

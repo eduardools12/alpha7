@@ -15,6 +15,8 @@ const shared = { channel: 'chrome', locale: 'pt-BR', timezoneId: 'America/Sao_Pa
 export default defineConfig({
   testDir: 'e2e',
   fullyParallel: true,
+  // Com os testes em paralelo a máquina fica carregada: 5 s é curto para a primeira renderização de telas com gráficos.
+  expect: { timeout: 10_000 },
   reporter: 'list',
   projects: [
     { name: 'local', testIgnore: /auth\.spec\.ts/, use: { ...shared, baseURL: 'http://localhost:5174' } },
@@ -26,6 +28,8 @@ export default defineConfig({
       url: 'http://localhost:5174',
       reuseExistingServer: true,
       timeout: 60_000,
+      // Os testes locais exigem o backend local, mesmo que o .env.local da máquina aponte para a nuvem.
+      env: { VITE_DATA_BACKEND: 'local' },
     },
     {
       command: 'npm run dev -- --port 5175 --strictPort',

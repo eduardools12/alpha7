@@ -239,3 +239,15 @@ create table rally_events (
 ### Diferenças entre A e B a decidir na implementação
 
 `jersey_number` único por equipe contra camisa repetida entre temporadas; fotos no Storage; `evaluator` texto livre contra referência a `auth.users`; formato de competição (sets e pontos) a confirmar com o Alpha7.
+
+## Partidas (0.5.0)
+
+**No app** (`Workspace`, coleções aditivas e separadas dos treinos): `matches`, `matchSets` (formação inicial: 6 titulares com posição 0 a 5, líbero, quem saca primeiro), `rallies` (ponto: set, número, quem sacava, quem ganhou, rotação, sacador, motivo, atleta envolvido, `attemptKey`, `voidedAt`) e `rallyActions` (ação técnica ligada a um ponto e a um atleta, mesma taxonomia dos treinos). Não há campo `demo`: partidas só existem se a equipe as criou. Regras puras em `src/domain/match.ts`; aplicação ao workspace em `src/data/matchOps.ts`.
+
+**No banco** (migração `20261013134608_matches.sql`, aditiva): `matches`, `match_sets`, `match_set_starters`, `rallies`, `rally_actions`, todas com `team_id` e chave `(team_id, id)` (sets: `(team_id, match_id, number)`).
+- Status e resultado de `matches` **não são graváveis direto** (`concluida` ⇔ resultado + `concluded_at`); mudam só por `conclude_match`/`reopen_match`. O formato trava depois do primeiro set (gatilho).
+- Sets, titulares, pontos e ações **não têm política de escrita**: só as funções `SECURITY DEFINER` gravam, travando a partida (`FOR UPDATE`), conferindo o papel (`can_record`; `reopen_match` só coach) e aplicando as regras de placar, saque e rotação: `start_set`, `record_rally` (ponto + ações numa transação; idempotente por `attempt_key`; `expected_seq` detecta tela atrasada, erro `40001`), `void_last_rally`, `cancel_empty_set`, `conclude_match`, `reopen_match`, `add_rally_action`, `void_rally_action`.
+- Ponto e ação nunca são editados (gatilho): só anulados, e a anulação não se desfaz. Índice único parcial impede dois pontos ativos no mesmo lugar do set. Excluir partida leva sets, pontos e ações; excluir atleta com registro de partida é recusado.
+- `matches_fk_indexes` (`20261013134700`) acrescenta dois índices apontados pelo advisor.
+
+**Backup/importação:** as quatro coleções entram no corpo do backup **só quando existe alguma partida** (assim dados e backups anteriores mantêm o mesmo checksum e a mesma impressão digital) e são validadas estritamente: ids, vínculos, sets em sequência, numeração de pontos, saque/rotação/sacador conferidos pelas regras, nenhum ponto depois do set fechado, resultado final igual ao dos sets, chaves de tentativa sem repetição.

@@ -1,20 +1,21 @@
 # Alpha7 Volleyball Performance
 
-Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.4.0** (v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos; v0.3 = proteção dos dados: backup, importação segura, cópia automática; 0.3.1 = inicialização e recuperação seguras: nunca cria demonstração sozinha; 0.4.0 = Supabase fase 2: login, equipe, papéis e `SupabaseGateway`, com o backend local ainda como padrão). A versão vive em `src/version.ts` e deve ser igual à do `package.json` (há teste).
+Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.5.0** (0.5.0 = Partidas, Estatísticas consolidadas e Gerador de artes (só coach); v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos; v0.3 = proteção dos dados: backup, importação segura, cópia automática; 0.3.1 = inicialização e recuperação seguras: nunca cria demonstração sozinha; 0.4.0 = Supabase fase 2: login, equipe, papéis e `SupabaseGateway`, com o backend local ainda como padrão). A versão vive em `src/version.ts` e deve ser igual à do `package.json` (há teste).
 
 ## Estado atual (não declare como pronto o que está só planejado)
 
 | Módulo | Estado |
 |---|---|
 | Shell, navegação, identidade visual | Implementado |
-| Dashboard | Implementado. Elenco, Overall, treinos concluídos e último treino são reais (derivados de avaliações e treinos); **apenas partidas e próxima partida** são dados de demonstração |
+| Dashboard | Implementado. Elenco, Overall, treinos e, com partidas cadastradas, partidas disputadas e próxima partida são reais; o resumo de partidas de demonstração só aparece enquanto não há nenhuma partida real |
 | Elenco: cartas, busca, filtros, cadastro, edição, perfil | Implementado |
 | Atributos (1 a 99), avaliações com histórico, Overall por posição, pesos configuráveis | Implementado |
 | Escalação: editor com 6 titulares, líbero, reservas, ordem de saque, prévia de rodízio, salvar/listar | Implementado (regras parciais, veja `docs/PRODUCT_SPEC.md`) |
 | Treinos: lista, criar/editar/excluir, participantes, exercícios, registro rápido por fundamento com desfazer, resumo pós-treino com estatísticas | Implementado (v0.2). Critérios de resultado e limite de amostra são **decisões iniciais a validar** (`docs/METRICS.md`, seção C) |
 | Perfil do atleta: métricas observadas (de treinos) | Implementado; as de partida seguem indisponíveis |
-| Partidas, Estatísticas consolidadas | **Não implementadas**: telas honestas de "em desenvolvimento" |
-| Gerador de artes (pôster da escalação) | **Não implementado**: botão desativado |
+| Partidas (0.5.0): cadastro, formato configurável, placar por set, saque e rotação, pontos com motivo opcional, ações técnicas opcionais, desfazer, encerrar/reabrir | Implementado (local e Supabase). Regras em `domain/match.ts`; no banco, funções transacionais (migração `20261013134608_matches`, **aplicada** e provada no banco real). Sem substituições nem entrada automática do líbero |
+| Estatísticas consolidadas (0.5.0): filtros, side-out e ponto de saque por rotação, treino x partida lado a lado, gráficos, comparação por posição, período anterior, leitura individual | Implementado (`domain/stats.ts`, `/estatisticas`). Limite de 10 p.p. para citar diferença individual é **decisão inicial a validar** (`docs/METRICS.md`, seção D) |
+| Gerador de artes (0.5.0): PNG 4:5 e 9:16 da escalação | Implementado, **só coach** (restrição de interface e rota; sem Storage). SVG determinístico, sem IA nem rostos |
 | Proteção dos dados (v0.3): exportar/importar backup JSON validado, cópia automática com desfazer, confirmação reforçada, verificar integridade, lembrete, recuperação de dado ilegível | Implementado. Auditoria e riscos: `docs/DATA_SAFETY.md` |
 | Supabase fase 1: projeto `alpha7`, esquema, RLS por equipe e papéis, testes de segurança no banco | Implementado no banco (`supabase/`). **O aplicativo ainda não usa**: sem login, sem `SupabaseGateway`; nenhum dado real foi enviado |
 | Supabase fase 2 (0.4.0): login por e-mail e senha, recuperação de senha, escolha/criação de equipe, papéis (coach/analyst/viewer) na interface, `SupabaseGateway` operação por operação | Implementado, **desligado por padrão** (`VITE_DATA_BACKEND=supabase` liga). Testado com cliente **simulado**, nas políticas no banco real e, **à mão (pelo dono do projeto, em 2026-10-13)**, com conta real: login, criar equipe, cadastrar atleta e recarregar, e recuperação de senha de ponta a ponta no site publicado. O código padrão continua `local`; o `.env.local` do dono e o site de produção usam `supabase`. Ver `supabase/README.md` |
@@ -44,7 +45,8 @@ src/
   domain/       Regras de negócio PURAS (sem React, sem I/O): atributos, Overall, jogador,
                 filtro do elenco, escalação, métricas, insights, formatação, fundamentos e
                 resultados (fundamentals), treinos e eventos (training), estatísticas de treino
-                (trainingStats). Tudo testado.
+                (trainingStats, reaproveitadas para ações de partida), partidas (match), estatísticas
+                consolidadas (stats) e arte da escalação (lineupArt). Tudo testado.
   data/         Persistência e estado: contrato DataGateway, LocalStorageGateway, dados de
                 demonstração, WorkspaceProvider (store em contexto), selectors.
   data/supabase Backend remoto: config (VITE_*), cliente único tipado, tipos gerados do banco,
@@ -87,6 +89,8 @@ Regra de dependência: `domain` não importa nada de fora de `domain`. `data` im
 8. **Eventos de treino** (`TrainingEvent`): uma tentativa por evento, com `attemptKey` (idempotência: o mesmo envio nunca duplica). Só se cria evento com treino aberto, exercício DO treino e atleta participante (checado no domínio **e** no gateway). **Desfazer anula** (`voidedAt`), não apaga; toda estatística ignora anulados. Editar um treino nunca toca nos eventos; não se remove exercício com registros nem participante com registros válidos; excluir treino apaga em cascata só o que é dele.
 9. **Estatística de treino sempre com tentativas e denominador**, usando as funções de `domain/trainingStats.ts` (fórmulas em `docs/METRICS.md`). Amostra com menos de `MIN_SAMPLE` (10) tentativas é sinalizada; comparação entre atletas só com 2 ou mais de amostra adequada. A qualidade do levantamento é indicador separado do resultado do ataque. Nunca escreva "conclusões" automáticas.
 10. **Eventos de treino e de partida são coleções separadas** (a taxonomia de `domain/fundamentals.ts` é compartilhada). Registrar tentativas nunca altera avaliações (notas) nem Overall.
+11. **Partidas:** o placar NUNCA é gravado, é a contagem dos pontos ativos; um set só fecha com pontuação nominal E diferença mínima, e a partida só encerra com confirmação. Saque, rotação e sacador são calculados pelo backend (`domain/match.ts` e as funções SQL), nunca aceitos do cliente. Ponto e ação técnica são **anulados**, nunca editados nem apagados (exceto cascata de excluir partida). **Motivo do ponto e ação técnica são camadas separadas e nunca se somam**; treino e partida nunca viram um número só. Sets, pontos e ações só se gravam por funções do banco; novas regras de placar mudam `match.ts` E o SQL (migração nova) E os dois testes.
+12. **Gerador de artes é só do coach** (`arts:generate`, item de menu e rota). Não grava nada; o desenho é determinístico (sem IA, sem rosto, sem mockup de fundo); a prévia e o PNG usam o mesmo SVG.
 
 ## Segurança
 

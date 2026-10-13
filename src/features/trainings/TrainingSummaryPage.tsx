@@ -25,7 +25,9 @@ export function TrainingSummaryPage() {
   const { data, actions, backend } = useWorkspace();
   const navigate = useNavigate();
   const location = useLocation();
-  const flash = (location.state as { flash?: string } | null)?.flash;
+  const incoming = (location.state as { flash?: string } | null)?.flash;
+  // A confirmação fica guardada no componente: se dependesse do estado do histórico, sumiria no render seguinte à limpeza.
+  const [flash] = useState(incoming);
 
   const training = data.trainings.find((t) => t.id === trainingId);
   const events = useMemo(() => data.trainingEvents.filter((e) => e.trainingId === trainingId), [data.trainingEvents, trainingId]);
@@ -47,8 +49,8 @@ export function TrainingSummaryPage() {
   const comparisonFundamental = chosen ?? busiest;
 
   useEffect(() => {
-    if (flash) navigate(location.pathname, { replace: true, state: null });
-  }, [flash, location.pathname, navigate]);
+    if (incoming) navigate(location.pathname, { replace: true, state: null });
+  }, [incoming, location.pathname, navigate]);
 
   if (!training || !summary) {
     return (

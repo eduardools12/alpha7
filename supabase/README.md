@@ -108,6 +108,8 @@ Comportamento:
 | `20261013101642_rls_and_rpc.sql` | Funções de papel (schema `private`), RLS, privilégios, `create_team` e `add_team_member` |
 | `20261013101855_fix_authenticated_privileges.sql` | Correção achada pelos testes: revoga os privilégios padrão do Supabase para `authenticated` e concede só o necessário |
 | `20261013102000_missing_fk_indexes.sql` | Índices de chaves estrangeiras apontados pelo advisor |
+| `20261013134608_matches.sql` | **0.5.0, aditiva:** partidas, sets, titulares do set, pontos e ações técnicas; funções transacionais de placar (`start_set`, `record_rally`, `void_last_rally`, `cancel_empty_set`, `conclude_match`, `reopen_match`, `add_rally_action`, `void_rally_action`); RLS e privilégios mínimos (sem escrita direta em sets/pontos/ações) |
+| `20261013134700_matches_fk_indexes.sql` | Índices apontados pelo advisor de desempenho depois das partidas |
 
 Aplicadas no projeto com exatamente este SQL, nesta ordem; os nomes usam as versões registradas no banco (`supabase_migrations.schema_migrations`). Migração aplicada **não se edita**: corrija com uma nova. Depois de cada migração: rodar os testes SQL abaixo, os advisors de segurança/desempenho e regerar `database.types.ts`.
 
@@ -124,6 +126,7 @@ Aplicadas no projeto com exatamente este SQL, nesta ordem; os nomes usam as vers
 | Teste | O que prova | Onde roda |
 |---|---|---|
 | `supabase/tests/rls.test.sql` | **RLS, privilégios, papéis, integridade entre equipes, append-only e cascatas, no banco real** | Banco `alpha7`, em transação que **sempre termina em exceção** (`TESTES_OK: …`), sem deixar dado |
+| `supabase/tests/matches.test.sql` | **Partidas no banco real:** regras de pontuação, saque e rotação, idempotência, conflito (`40001`), ações inválidas desfazendo o ponto inteiro, gatilhos de “só anular”, formato travado, papéis (coach/analyst/viewer/outra equipe), isolamento entre equipes, cascata. Termina em `TESTES_OK` e desfaz tudo. Última execução: `TESTES_OK`, banco sem sobras | Idem |
 | `supabase/tests/gateway_shapes.test.sql` | **As formas exatas de SQL que o gateway gera** (upsert, `ON CONFLICT DO NOTHING`, anular, excluir sem permissão = 0 linhas, troca de titulares) e as inferências sobre respostas da RLS, **com a RLS real** | Idem |
 | `src/data/supabase/*.test.ts`, `src/auth/*.test.tsx`, `src/app/remote.test.tsx` | Comportamento do **código do aplicativo** (login, sessão, equipe, papéis na interface, gateway, erros, ausência de mistura local/remoto) contra um **cliente Supabase simulado** (`src/test/fakeSupabase.ts`) | Vitest, sem rede |
 | `e2e/auth.spec.ts` | Tela de login em **navegador real** (acessibilidade, layout, falha de rede real), com o backend Supabase ligado e apontando para um endereço que nunca resolve | Playwright, sem tocar no projeto real |
@@ -148,3 +151,9 @@ O que **não** foi testado: a latência e o limite de linhas reais do PostgREST 
 2. Funções atômicas de salvamento de escalação/treino, se necessário (limite 1 acima).
 3. Atualização em tempo real (Realtime) e política de conflitos entre pessoas.
 4. Bloqueio do último coach, lista de membros com nomes, retenção e backup do banco.
+
+## Partidas (0.5.0): papéis e avisos do advisor
+
+- `viewer` lê tudo e não escreve nada; `analyst` cadastra/edita partidas e registra pontos e ações; só `coach` exclui partida e reabre partida concluída.
+- Os 8 avisos “SECURITY DEFINER executável por usuários logados” do advisor para as funções de partida são **intencionais** (mesmo padrão de `create_team`): cada função confere o papel por dentro e as tabelas não aceitam escrita direta. O aviso de proteção contra senhas vazadas é do painel de autenticação e continua pendente.
+- Aplicar em outro ambiente: `supabase/migrations/20261013134608_matches.sql` e depois `..._matches_fk_indexes.sql`, rodar `supabase/tests/matches.test.sql` e regerar `src/data/supabase/database.types.ts`.

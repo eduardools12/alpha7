@@ -90,17 +90,3 @@ describe('navegação no celular', () => {
     expect(document.getElementById('menu-mais')).toBeNull();
   });
 });
-
-describe('módulos ainda não desenvolvidos', () => {
-  it.each([
-    ['/partidas', 'Partidas'],
-    ['/estatisticas', 'Estatísticas'],
-  ])('%s declara que está em desenvolvimento e não oferece controles falsos', async (path, title) => {
-    renderApp({ path });
-    expect(await screen.findByRole('heading', { level: 1, name: title })).toBeInTheDocument();
-    expect(screen.getByText('Este módulo ainda está em desenvolvimento')).toBeInTheDocument();
-    const main = screen.getByRole('main');
-    expect(within(main).queryAllByRole('button')).toHaveLength(0);
-    expect(within(main).queryAllByRole('textbox')).toHaveLength(0);
-  });
-});

@@ -25,6 +25,7 @@ const ROUTES = [
   '/treinos/demo-t-04/registrar',
   '/treinos/demo-t-01/registrar',
   '/partidas',
+  '/partidas/nova',
   '/estatisticas',
   '/configuracoes',
   '/rota-inexistente',

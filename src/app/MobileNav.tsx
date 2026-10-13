@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useAccess } from '@/auth/AccessContext';
 import { Logo } from '@/components/brand/Logo';
 import { Icon } from '@/components/ui/Icon';
 import { NAV_ITEMS, PATHS } from './routes';
 import styles from './MobileNav.module.css';
 
 const PRIMARY = NAV_ITEMS.filter((item) => !item.secondary);
-const MORE = NAV_ITEMS.filter((item) => item.secondary);
+const ALL_MORE = NAV_ITEMS.filter((item) => item.secondary);
 
 export function MobileTopBar() {
   return (
@@ -21,6 +22,8 @@ export function MobileTopBar() {
 
 export function MobileNav() {
   const [open, setOpen] = useState(false);
+  const access = useAccess();
+  const MORE = ALL_MORE.filter((item) => !item.capability || access.can(item.capability));
   const location = useLocation();
   const toggleRef = useRef<HTMLButtonElement>(null);
   const moreActive = MORE.some((item) => location.pathname.startsWith(item.to));

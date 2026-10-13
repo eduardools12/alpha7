@@ -8,6 +8,7 @@
  * coberto por supabase/tests/rls.test.sql, executado no banco de verdade (e desfeito no final).
  */
 import type { AlphaSupabaseClient } from '@/data/supabase/client';
+import { isMatchFunction, runMatchRpc } from './fakeMatchRpc';
 
 type Row = Record<string, unknown>;
 type Role = 'coach' | 'analyst' | 'viewer';
@@ -18,6 +19,8 @@ interface ForeignKey {
   ref: string;
   refCols: string[];
   cascade: boolean;
+  /** ON DELETE SET NULL (colunas do filho, exceto team_id): a referência some, a linha fica. */
+  setNull?: boolean;
 }
 interface TableDef {
   pk: string[];
@@ -96,7 +99,58 @@ export const TABLES: Record<string, TableDef> = {
     ],
     writers: ['coach', 'analyst'],
   },
+  // Partidas. Só `matches` aceita escrita direta (e só dos dados do jogo); sets, titulares, rallies e ações técnicas
+  // são gravados apenas pelas funções do banco (writers vazio = nenhuma política de escrita, como no SQL real).
+  matches: {
+    pk: [T, 'id'],
+    unique: [],
+    fks: [{ name: 'matches_team_id_lineup_id_fkey', cols: [T, 'lineup_id'], ref: 'lineups', refCols: [T, 'id'], cascade: false, setNull: true }],
+    writers: ['coach', 'analyst'],
+    deleters: ['coach'],
+  },
+  match_sets: {
+    pk: [T, 'match_id', 'number'],
+    unique: [],
+    fks: [
+      { name: 'match_sets_team_id_match_id_fkey', cols: [T, 'match_id'], ref: 'matches', refCols: [T, 'id'], cascade: true },
+      { name: 'match_sets_team_id_libero_id_fkey', cols: [T, 'libero_id'], ref: 'players', refCols: [T, 'id'], cascade: false },
+    ],
+    writers: [],
+  },
+  match_set_starters: {
+    pk: [T, 'match_id', 'set_number', 'slot'],
+    unique: [{ name: 'match_set_starters_team_id_match_id_set_number_player_id_key', cols: [T, 'match_id', 'set_number', 'player_id'] }],
+    fks: [
+      { name: 'match_set_starters_team_id_match_id_set_number_fkey', cols: [T, 'match_id', 'set_number'], ref: 'match_sets', refCols: [T, 'match_id', 'number'], cascade: true },
+      { name: 'match_set_starters_team_id_player_id_fkey', cols: [T, 'player_id'], ref: 'players', refCols: [T, 'id'], cascade: false },
+    ],
+    writers: [],
+  },
+  rallies: {
+    pk: [T, 'id'],
+    unique: [{ name: 'rallies_team_id_attempt_key_key', cols: [T, 'attempt_key'] }],
+    fks: [
+      { name: 'rallies_team_id_match_id_set_number_fkey', cols: [T, 'match_id', 'set_number'], ref: 'match_sets', refCols: [T, 'match_id', 'number'], cascade: true },
+      { name: 'rallies_team_id_server_player_id_fkey', cols: [T, 'server_player_id'], ref: 'players', refCols: [T, 'id'], cascade: false },
+      { name: 'rallies_team_id_player_id_fkey', cols: [T, 'player_id'], ref: 'players', refCols: [T, 'id'], cascade: false },
+    ],
+    writers: [],
+  },
+  rally_actions: {
+    pk: [T, 'id'],
+    unique: [{ name: 'rally_actions_team_id_attempt_key_key', cols: [T, 'attempt_key'] }],
+    fks: [
+      { name: 'rally_actions_team_id_match_id_rally_id_fkey', cols: [T, 'match_id', 'rally_id'], ref: 'rallies', refCols: [T, 'match_id', 'id'], cascade: true },
+      { name: 'rally_actions_team_id_player_id_fkey', cols: [T, 'player_id'], ref: 'players', refCols: [T, 'id'], cascade: false },
+    ],
+    writers: [],
+  },
 };
+
+const MATCH_INSERT_COLUMNS = ['team_id', 'id', 'opponent', 'competition', 'scheduled_at', 'venue', 'lineup_id', 'best_of', 'set_points', 'deciding_set_points', 'min_lead', 'created_at', 'updated_at'];
+const MATCH_UPDATE_COLUMNS = ['opponent', 'competition', 'scheduled_at', 'venue', 'lineup_id', 'best_of', 'set_points', 'deciding_set_points', 'min_lead', 'updated_at'];
+
+const MATCH_DEFAULTS: Row = { competition: '', scheduled_at: '', venue: '', lineup_id: null, best_of: 5, set_points: 25, deciding_set_points: 15, min_lead: 2, status: 'agendada', final_sets_us: null, final_sets_them: null, concluded_at: null };
 
 const OUTCOMES: Record<string, string[]> = {
   saque: ['ace', 'valido', 'erro'],
@@ -223,6 +277,10 @@ export class FakeSupabase {
       else rows.push({ team_id: team, user_id: target.id, role: String(args.p_role), created_at: new Date().toISOString() });
       return { data: null, error: null, status: 200 };
     }
+    if (isMatchFunction(name)) {
+      if (!uid) return { data: null, error: pgError('42501', 'permission denied for function'), status: 403 };
+      return runMatchRpc(this.db, (team) => this.role(team), name, args);
+    }
     return { data: null, error: pgError('PGRST202', `Could not find the function public.${name}`), status: 404 };
   }
 
@@ -339,8 +397,11 @@ export class FakeSupabase {
     if (q.op === 'insert' || q.op === 'upsert') {
       const incoming = (Array.isArray(payload) ? payload : [payload]).map((r) => ({ ...(r as Row) }));
       const out: Row[] = [];
-      for (const raw of incoming) {
-        this.requireWrite(def, q.table, raw, 'insert');
+      for (const given of incoming) {
+        this.requireWrite(def, q.table, given, 'insert');
+        if (q.table === 'matches') this.guardMatchColumns(given, MATCH_INSERT_COLUMNS);
+        // Valores padrão das colunas, como o banco aplica.
+        const raw = q.table === 'matches' ? { ...MATCH_DEFAULTS, ...given } : given;
         const target = q.onConflict ?? def.pk;
         const existing = q.op === 'upsert' ? table.find((r) => key(r, target) === key(raw, target)) : undefined;
         if (existing) {
@@ -388,8 +449,22 @@ export class FakeSupabase {
     }
   }
 
+  /** Colunas que o banco deixa gravar direto em `matches` (status e resultado só pelas funções). */
+  private guardMatchColumns(next: Row, allowed: readonly string[]) {
+    if (Object.keys(next).some((column) => !allowed.includes(column))) {
+      throw new Abort(pgError('42501', 'permission denied for table matches'));
+    }
+  }
+
   /** Regras de "só acrescenta" e "só anula" do banco. */
   private guardUpdate(table: string, current: Row, next: Row) {
+    if (table === 'matches') {
+      this.guardMatchColumns(next, MATCH_UPDATE_COLUMNS);
+      const formatChanged = ['best_of', 'set_points', 'deciding_set_points', 'min_lead'].some((c) => c in next && !same(current[c], next[c]));
+      if (formatChanged && (this.db.match_sets ?? []).some((s) => s[T] === current[T] && s.match_id === current.id)) {
+        throw new Abort(pgError('23514', 'O formato não pode mudar depois que o primeiro set foi iniciado.'));
+      }
+    }
     if (table === 'evaluations') throw new Abort(pgError('23514', 'Avaliações não podem ser editadas: registre uma nova avaliação.'));
     if (table === 'training_events') {
       for (const column of Object.keys(next)) {
@@ -446,7 +521,9 @@ export class FakeSupabase {
           const children = (this.db[childName] ?? []).filter((c) => rows.some((p) => key(p, fk.refCols) === key(c, fk.cols)));
           if (children.length === 0) continue;
           if (fk.cascade) this.remove(childName, children);
-          else {
+          else if (fk.setNull) {
+            for (const child of children) for (const col of fk.cols.slice(1)) child[col] = null;
+          } else {
             // NO ACTION: só vale se, ao fim da instrução, ainda restar dependente (a cascata pode ter levado junto).
             this.pendingRestrict.push({ childName, fk, children, table });
           }

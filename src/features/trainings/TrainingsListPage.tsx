@@ -18,15 +18,17 @@ export function TrainingsListPage() {
   const { data, actions, backend } = useWorkspace();
   const location = useLocation();
   const navigate = useNavigate();
-  const flash = (location.state as { flash?: string } | null)?.flash;
+  const incoming = (location.state as { flash?: string } | null)?.flash;
+  // A confirmação fica guardada no componente: se dependesse do estado do histórico, sumiria no render seguinte à limpeza.
+  const [flash] = useState(incoming);
   const [confirming, setConfirming] = useState<string | null>(null);
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   // Mostra a confirmação uma vez: limpa o estado do histórico para que recarregar não a repita.
   useEffect(() => {
-    if (flash) navigate(location.pathname, { replace: true, state: null });
-  }, [flash, location.pathname, navigate]);
+    if (incoming) navigate(location.pathname, { replace: true, state: null });
+  }, [incoming, location.pathname, navigate]);
 
   const trainings = [...data.trainings].sort(
     (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),

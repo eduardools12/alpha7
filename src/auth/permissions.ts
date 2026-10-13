@@ -22,6 +22,10 @@ export const CAPABILITIES = [
   'trainings:write',
   'trainings:delete',
   'events:record',
+  'matches:write',
+  'matches:delete',
+  'matches:reopen',
+  'arts:generate',
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -34,6 +38,10 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   'trainings:write': 'criar ou editar treinos',
   'trainings:delete': 'excluir treinos',
   'events:record': 'registrar ou desfazer tentativas de treino',
+  'matches:write': 'criar ou editar partidas e registrar pontos',
+  'matches:delete': 'excluir partidas',
+  'matches:reopen': 'reabrir uma partida concluída',
+  'arts:generate': 'gerar artes da escalação',
 };
 
 const ALLOWED: Record<Capability, readonly Role[]> = {
@@ -44,6 +52,12 @@ const ALLOWED: Record<Capability, readonly Role[]> = {
   'trainings:write': ['coach', 'analyst'],
   'trainings:delete': ['coach'],
   'events:record': ['coach', 'analyst'],
+  // Partidas: o analista acompanha o jogo (como nos treinos); excluir e reabrir é da comissão técnica.
+  'matches:write': ['coach', 'analyst'],
+  'matches:delete': ['coach'],
+  'matches:reopen': ['coach'],
+  // Só a comissão técnica gera artes. É restrição da INTERFACE e da rota (nada é gravado no banco pela arte): ver docs/DATA_SAFETY.md.
+  'arts:generate': ['coach'],
 };
 
 export const roleCan = (role: Role, capability: Capability): boolean => ALLOWED[capability].includes(role);

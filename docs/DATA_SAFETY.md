@@ -223,3 +223,10 @@ Preservar, como contrato:
 - `supabase/tests/rls.test.sql` e `gateway_shapes.test.sql` (0.4.0): **no banco real**, em transação que termina sempre em exceção `TESTES_OK` (nada persiste): RLS, privilégios, papéis, integridade, append-only e as formas de SQL do gateway.
 - `e2e/auth.spec.ts` (Playwright, 0.4.0): login em navegador real com o backend Supabase apontando para endereço inexistente (acessibilidade, layout, falha de rede real).
 - `e2e/backup.spec.ts` (Playwright, navegador real): download de verdade, apagar e restaurar, arquivo adulterado e lixo recusados, cancelar, desfazer, demonstração mantendo pesos, lembrete, axe (acessibilidade) e ausência de rolagem horizontal em 1280 px e 360 px.
+
+## 13. Partidas e gerador de artes (0.5.0)
+
+- **Local:** excluir uma partida guarda antes a cópia de segurança (a mesma da exclusão de treino) e mostra as contagens do que será apagado; desfazer ponto **anula**, não apaga; encerrar pede confirmação (avisa de set em andamento e de partida não decidida pelo formato); reabrir é da comissão técnica (no modo local, de quem usa o navegador).
+- **Nuvem:** a escrita de sets, pontos e ações é impossível pelas tabelas e passa por funções transacionais com checagem de papel por dentro; duas pessoas registrando ao mesmo tempo não duplicam (idempotência) nem se atropelam (conflito `40001`: nada é gravado, a tela recarrega e avisa). Não existe cópia de segurança remota: a proteção é anular em vez de apagar, e só a comissão técnica exclui/reabre.
+- **Backup:** coleções de partida entram aditivamente (ver `DATA_MODEL.md`); um backup anterior à 0.5.0 continua restaurável e abre com listas vazias.
+- **Gerador de artes:** a restrição à comissão técnica (`arts:generate`) é da **interface e da rota** (item de menu oculto e rota barrada com explicação). Não há Storage nem escrita no banco: a arte é gerada no navegador de quem a pede, a partir de dados que essa pessoa já pode ler. **Não é uma barreira de segurança de dados**: um analista/leitor que montasse o mesmo desenho por conta própria teria os mesmos dados (que o banco já lhe entrega para leitura).

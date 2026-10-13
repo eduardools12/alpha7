@@ -10,7 +10,7 @@ describe('matriz de papéis da interface', () => {
 
   it('analyst registra (avaliações, treinos, tentativas), mas não mexe em elenco, pesos, escalações nem exclui treino', () => {
     const allowed = CAPABILITIES.filter((c) => roleCan('analyst', c));
-    expect(allowed.sort()).toEqual(['evaluations:add', 'events:record', 'trainings:write']);
+    expect(allowed.sort()).toEqual(['evaluations:add', 'events:record', 'matches:write', 'trainings:write']);
   });
 
   it('viewer não pode nada que escreva', () => {
@@ -30,7 +30,8 @@ describe('matriz de papéis da interface', () => {
  * supabase/tests/rls.test.sql. Se mudar a migração, este teste lembra de atualizar a interface.
  */
 describe('a interface espelha as políticas do arquivo de migração', () => {
-  const sql = readFileSync(resolve(__dirname, '../../supabase/migrations/20261013101642_rls_and_rpc.sql'), 'utf8');
+  const matchesSql = readFileSync(resolve(__dirname, '../../supabase/migrations/20261013134608_matches.sql'), 'utf8');
+  const sql = `${readFileSync(resolve(__dirname, '../../supabase/migrations/20261013101642_rls_and_rpc.sql'), 'utf8')}\n${matchesSql}`;
   const policy = /create policy (\w+) on public\.(\w+) for (select|insert|update|delete) to authenticated\s+(?:using|with check) \(private\.(\w+)\(/g;
   const rolesOf = (fn: string): Role[] => (fn === 'is_coach' ? ['coach'] : fn === 'can_record' ? ['coach', 'analyst'] : ['coach', 'analyst', 'viewer']);
   const rules = new Map<string, Role[]>(); // "tabela:operação" → papéis
@@ -49,6 +50,11 @@ describe('a interface espelha as políticas do arquivo de migração', () => {
     'trainings:write': ['trainings:insert', 'trainings:update', 'training_participants:insert', 'training_exercises:insert'],
     'trainings:delete': ['trainings:delete'],
     'events:record': ['training_events:insert', 'training_events:update'],
+    'matches:write': ['matches:insert', 'matches:update'],
+    'matches:delete': ['matches:delete'],
+    // Funções (reopen_match) e a restrição da arte não são políticas de tabela: conferidas nos testes abaixo.
+    'matches:reopen': [],
+    'arts:generate': [],
   };
 
   for (const capability of CAPABILITIES) {
@@ -61,6 +67,31 @@ describe('a interface espelha as políticas do arquivo de migração', () => {
       }
     });
   }
+
+  it('as funções de partida do SQL conferem o papel por dentro, igual à matriz da interface', () => {
+    const bodies = new Map<string, string>();
+    for (const part of matchesSql.split('create function public.').slice(1)) bodies.set(part.slice(0, part.indexOf('(')), part);
+    const recorders = ['start_set', 'record_rally', 'void_last_rally', 'cancel_empty_set', 'conclude_match', 'add_rally_action', 'void_rally_action'];
+    for (const name of recorders) {
+      expect(bodies.get(name), name).toContain('private.can_record(p_team)');
+      expect(roleCan('analyst', 'matches:write')).toBe(true);
+    }
+    expect(bodies.get('reopen_match')).toContain('private.is_coach(p_team)');
+    expect(roleCan('analyst', 'matches:reopen')).toBe(false);
+    expect(roleCan('coach', 'matches:reopen')).toBe(true);
+  });
+
+  it('sets, titulares, rallies e ações técnicas não têm política de escrita: só as funções gravam', () => {
+    for (const table of ['match_sets', 'match_set_starters', 'rallies', 'rally_actions']) {
+      for (const op of ['insert', 'update', 'delete']) expect(rules.has(`${table}:${op}`), `${table}:${op}`).toBe(false);
+      expect(rules.get(`${table}:select`), table).toEqual(['coach', 'analyst', 'viewer']);
+    }
+    expect(matchesSql).toMatch(/revoke all on table public\.matches, public\.match_sets, public\.match_set_starters, public\.rallies, public\.rally_actions\s+from anon, public, authenticated;/);
+    // Status e resultado da partida não estão entre as colunas gravadas direto.
+    const grants = matchesSql.match(/grant (?:insert|update) \(([^)]*)\)\s+on public\.matches/g) ?? [];
+    expect(grants).toHaveLength(2);
+    for (const grant of grants) expect(grant).not.toMatch(/\b(status|final_sets_us|final_sets_them|concluded_at)\b/);
+  });
 
   it('o simulador de testes escreve nas mesmas tabelas que as políticas permitem', () => {
     for (const [table, def] of Object.entries(TABLES)) {

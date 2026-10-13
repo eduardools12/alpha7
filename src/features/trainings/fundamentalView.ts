@@ -1,6 +1,5 @@
 import { OUTCOME_INFO, type Fundamental, type OutcomeInfo, type OutcomeTone } from '@/domain/fundamentals';
 import { formatPercent, formatRatioContext, ratio as ratioOf, type Ratio } from '@/domain/metrics';
-import type { TrainingEvent } from '@/domain/training';
 import {
   attackStats,
   blockStats,
@@ -12,6 +11,7 @@ import {
   settingStats,
   RECEPTION_SCORE_MAX,
   type SampleLevel,
+  type StatEvent,
 } from '@/domain/trainingStats';
 
 export interface DistributionItem {
@@ -61,7 +61,7 @@ const line = (label: string, r: Ratio, formula?: string): MetricLine => ({
 });
 
 /** Estatísticas de um fundamento, prontas para exibir, a partir de eventos de treino. */
-export function viewFundamental(fundamental: Fundamental, events: readonly TrainingEvent[]): FundamentalView {
+export function viewFundamental(fundamental: Fundamental, events: readonly StatEvent[]): FundamentalView {
   switch (fundamental) {
     case 'saque': {
       const s = serveStats(events);

@@ -10,6 +10,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useWorkspace } from '@/data/WorkspaceProvider';
 import { formatDate, formatDateTime, formatSigned, monthShort } from '@/domain/format';
+import { MATCH_STATUS_LABEL, matchRecord, upcomingMatch } from '@/domain/match';
 import { biggestRisers, playerStandings, teamOverallSeries, topByOverall } from '@/domain/insights';
 import { average, formatPercent, formatRatioContext, ratio, UNAVAILABLE } from '@/domain/metrics';
 import { shortName } from '@/domain/player';
@@ -41,7 +42,10 @@ function Tile({
 
 export function DashboardPage() {
   const { data } = useWorkspace();
-  const { players, evaluations, settings, activity, trainings, exercises, trainingEvents } = data;
+  const { players, evaluations, settings, activity: demoActivity, trainings, exercises, trainingEvents, matches } = data;
+  // Com partidas reais, o dashboard usa SÓ elas; o resumo de demonstração só aparece enquanto não houver nenhuma.
+  const realMatches = matches.length > 0;
+  const activity = realMatches ? null : demoActivity;
 
   const standings = useMemo(
     () => playerStandings(players, evaluations, settings.weights),
@@ -55,7 +59,7 @@ export function DashboardPage() {
   const top = topByOverall(standings, 3);
   const risers = biggestRisers(standings, 3);
 
-  if (players.length === 0 && !activity && trainings.length === 0) {
+  if (players.length === 0 && !activity && trainings.length === 0 && !realMatches) {
     return (
       <>
         <PageHeader title="Alpha7 Performance" subtitle="Dashboard principal" />
@@ -76,7 +80,9 @@ export function DashboardPage() {
   }
 
   const byStatus = (status: string) => players.filter((p) => p.status === status).length;
-  const win = activity ? ratio(activity.matches.wins, activity.matches.played) : null;
+  const record = realMatches ? matchRecord(matches) : activity ? activity.matches : null;
+  const win = record ? ratio(record.wins, record.played) : null;
+  const next = upcomingMatch(matches);
   const concluded = trainings.filter((t) => t.status === 'concluido');
   const ongoing = trainings.length - concluded.length;
   const allTrainingsDemo = trainings.length > 0 && trainings.every((t) => t.demo);
@@ -117,19 +123,30 @@ export function DashboardPage() {
         />
         <Tile
           label="Partidas disputadas"
-          value={activity ? String(activity.matches.played) : UNAVAILABLE}
+          value={record ? String(record.played) : UNAVAILABLE}
           detail={
             win && win.value !== null
               ? `Aproveitamento ${formatPercent(win)}: ${formatRatioContext(win)} vitórias`
-              : 'Sem partidas registradas'
+              : realMatches
+                ? `${matches.length} cadastrada${matches.length === 1 ? '' : 's'}, nenhuma concluída ainda`
+                : 'Sem partidas registradas'
           }
           demo={activity !== null}
         />
       </section>
 
       <div className={styles.row}>
-        <Card title="Próxima partida" titleAside={activity?.nextMatch ? <DemoTag /> : undefined}>
-          {activity?.nextMatch ? (
+        <Card title="Próxima partida" titleAside={!next && activity?.nextMatch ? <DemoTag /> : undefined}>
+          {next ? (
+            <>
+              <p className={styles.versus}>Alpha7 vs. {next.opponent}</p>
+              <p className={styles.muted}>
+                {[next.scheduledAt ? formatDateTime(next.scheduledAt) : 'Sem data definida', next.venue].filter(Boolean).join(' · ')}
+              </p>
+              <p className={styles.muted}>{[MATCH_STATUS_LABEL[next.status], next.competition].filter(Boolean).join(' · ')}</p>
+              <ButtonLink to={PATHS.match(next.id)}>Ver partida</ButtonLink>
+            </>
+          ) : activity?.nextMatch ? (
             <>
               <p className={styles.versus}>Alpha7 vs. {activity.nextMatch.opponent}</p>
               <p className={styles.muted}>
@@ -139,7 +156,7 @@ export function DashboardPage() {
               <ButtonLink to={PATHS.lineups}>Ver escalações</ButtonLink>
             </>
           ) : (
-            <p className={styles.muted}>Nenhuma partida agendada. O agendamento chega com o módulo de partidas.</p>
+            <p className={styles.muted}>Nenhuma partida agendada.</p>
           )}
         </Card>
 

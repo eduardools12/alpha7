@@ -14,6 +14,9 @@ const ROUTES = [
   '/treinos/demo-t-01',
   '/treinos/demo-t-01/editar',
   '/treinos/demo-t-04/registrar',
+  '/partidas',
+  '/partidas/nova',
+  '/estatisticas',
   '/configuracoes',
 ];
 
@@ -38,6 +41,7 @@ for (const viewport of VIEWPORTS) {
     test.use({ viewport: { width: viewport.width, height: viewport.height } });
 
     test('nenhuma tela tem rolagem horizontal', async ({ page }) => {
+      test.setTimeout(120_000); // percorre todas as rotas, cada uma com carregamento de fontes
       for (const route of ROUTES) {
         await open(page, route);
         const overflow = await page.evaluate(() => ({

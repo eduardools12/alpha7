@@ -1,4 +1,5 @@
 import type { Lineup } from '@/domain/lineup';
+import type { ActionInput, Match, MatchSet, Rally, RallyAction, RallyInput, StartSetInput } from '@/domain/match';
 import type { Evaluation, Player } from '@/domain/player';
 import type { Training, TrainingEvent, TrainingExercise } from '@/domain/training';
 import type { WorkspaceSummary } from './backup';
@@ -100,6 +101,35 @@ export interface DataGateway {
   addTrainingEvent(event: TrainingEvent): Promise<void>;
   /** "Desfazer": anula o evento (voidedAt), sem apagá-lo. Idempotente. */
   voidTrainingEvent(eventId: string, voidedAt: string): Promise<void>;
+
+  /* ───────── partidas (as regras de pontuação, saque e rotação são as de domain/match.ts) ───────── */
+
+  /**
+   * Cria ou edita os DADOS do jogo (adversário, data, local, escalação, formato). Status e resultado só mudam por
+   * conclude/reopen. Falha com IntegrityError se o formato muda depois do primeiro set. Devolve a partida gravada.
+   */
+  saveMatch(match: Match): Promise<Match>;
+  /** Exclui a partida e, em cascata, sets, rallies e ações técnicas dela. */
+  deleteMatch(matchId: string): Promise<void>;
+  /** Inicia o próximo set com a formação inicial. ConflictError se o set esperado não é o próximo. */
+  startSet(matchId: string, input: StartSetInput): Promise<{ set: MatchSet; match: Match }>;
+  /**
+   * Registra um rally (e as ações técnicas dele) numa única transação. Saque, rotação e sacador são calculados pelo
+   * backend, nunca aceitos do cliente. Idempotente por attemptKey. ConflictError se a tela está atrasada.
+   */
+  recordRally(matchId: string, input: RallyInput): Promise<{ rally: Rally; actions: RallyAction[]; duplicate: boolean }>;
+  /** Anula o último rally ativo (e as ações dele). ConflictError se o último mudou. */
+  voidLastRally(matchId: string, rallyId: string, voidedAt: string): Promise<void>;
+  /** Desfaz o "iniciar set" do último set, só se nunca teve rally. */
+  cancelEmptySet(matchId: string, number: number): Promise<Match>;
+  /** Encerra a partida: o resultado é recalculado dos sets fechados. */
+  concludeMatch(matchId: string, concludedAt: string): Promise<Match>;
+  /** Reabre uma partida concluída para correção (só comissão técnica). */
+  reopenMatch(matchId: string): Promise<Match>;
+  /** Acrescenta uma ação técnica a um rally já registrado. Idempotente por attemptKey. */
+  addRallyAction(input: ActionInput & { rallyId: string; recordedAt: string }): Promise<RallyAction>;
+  /** Anula uma ação técnica. Idempotente. */
+  voidRallyAction(actionId: string, voidedAt: string): Promise<void>;
 }
 
 /** Os dados salvos existem, mas não têm o formato esperado. */
@@ -172,5 +202,16 @@ export class IntegrityError extends Error {
   constructor(detail: string) {
     super(detail);
     this.name = 'IntegrityError';
+  }
+}
+
+/**
+ * Outra pessoa (ou outra aba) mudou a partida antes desta operação: o que a tela mostrava estava atrasado. Nada foi
+ * gravado; a interface recarrega os dados e a pessoa repete a ação olhando o placar atual.
+ */
+export class ConflictError extends IntegrityError {
+  constructor(detail: string) {
+    super(detail);
+    this.name = 'ConflictError';
   }
 }

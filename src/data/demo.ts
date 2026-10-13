@@ -164,6 +164,10 @@ export function createDemoWorkspace(now: Date = new Date()): Workspace {
     trainings: demoTrainings.trainings,
     exercises: demoTrainings.exercises,
     trainingEvents: demoTrainings.events,
+    matches: [],
+    matchSets: [],
+    rallies: [],
+    rallyActions: [],
   };
 }
 
@@ -177,5 +181,9 @@ export function createEmptyWorkspace(): Workspace {
     trainings: [],
     exercises: [],
     trainingEvents: [],
+    matches: [],
+    matchSets: [],
+    rallies: [],
+    rallyActions: [],
   };
 }

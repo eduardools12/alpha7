@@ -1,4 +1,5 @@
 import type { Lineup } from '@/domain/lineup';
+import type { Match, MatchSet, Rally, RallyAction } from '@/domain/match';
 import type { OverallWeights } from '@/domain/overall';
 import type { Evaluation, Player } from '@/domain/player';
 import type { Training, TrainingEvent, TrainingExercise } from '@/domain/training';
@@ -28,4 +29,12 @@ export interface Workspace {
   trainings: Training[];
   exercises: TrainingExercise[];
   trainingEvents: TrainingEvent[];
+  /**
+   * Partidas, sets, rallies e ações técnicas (v0.5). Coleções ADITIVAS e separadas dos treinos: dados salvos antes
+   * das partidas abrem com listas vazias. O placar nunca é gravado: é derivado dos rallies ativos.
+   */
+  matches: Match[];
+  matchSets: MatchSet[];
+  rallies: Rally[];
+  rallyActions: RallyAction[];
 }

@@ -1,7 +1,9 @@
 import type { Lineup } from '@/domain/lineup';
 import type { Evaluation, Player } from '@/domain/player';
+import type { ActionInput, Match, MatchSet, Rally, RallyAction, RallyInput, StartSetInput } from '@/domain/match';
 import type { Training, TrainingEvent, TrainingExercise } from '@/domain/training';
 import {
+  ConflictError,
   IntegrityError,
   PermissionDeniedError,
   RemoteDataError,
@@ -24,10 +26,17 @@ import {
   exerciseFromRow,
   exerciseToRow,
   lineupFromRows,
+  jsonRow,
   lineupToRows,
+  matchFromRow,
+  matchToInsertRow,
+  matchToUpdateRow,
   participantRows,
   playerFromRow,
   playerToRow,
+  rallyActionFromRow,
+  rallyFromRow,
+  setFromRows,
   trainingFromRows,
   trainingToRow,
   weightsFromRows,
@@ -36,7 +45,12 @@ import {
   type EventRow,
   type ExerciseRow,
   type LineupRow,
+  type MatchRow,
   type ParticipantRow,
+  type RallyActionRow,
+  type RallyRow,
+  type SetRow,
+  type SetStarterRow,
   type StarterRow,
 } from './mappers';
 
@@ -65,6 +79,9 @@ interface PgResult {
   status?: number;
 }
 
+const RALLY_KEYS = ['id', 'match_id', 'set_number', 'seq', 'serving_side', 'winner_side', 'rotation', 'server_player_id', 'reason', 'player_id', 'attempt_key', 'recorded_at', 'voided_at'] as const;
+const ACTION_KEYS = ['id', 'match_id', 'rally_id', 'player_id', 'fundamental', 'outcome', 'attempt_key', 'recorded_at', 'voided_at'] as const;
+
 /** O PostgREST devolve no máximo 1000 linhas por requisição: lemos em páginas. */
 const PAGE_SIZE = 1000;
 
@@ -86,6 +103,10 @@ export function mapRemoteError(error: PgError, status?: number): Error {
 
   if (status === 401 || code === 'PGRST301' || code === 'PGRST303' || /jwt expired/i.test(message)) return new SessionExpiredError();
   if (code === '42501' || status === 403) return new PermissionDeniedError();
+  // Funções de partida: 40001 = a tela estava atrasada; P0001/P0002 = regra de negócio, com mensagem já em português.
+  if (code === '40001') return new ConflictError(error.message ?? 'Os dados da partida mudaram.');
+  if (code === 'P0001') return new IntegrityError(error.message ?? 'Regra da partida violada.');
+  if (code === 'P0002') return new IntegrityError('Esta partida não existe mais.');
   if (status === 0 || /failed to fetch|networkerror|network request failed|load failed|fetch failed/i.test(message)) {
     return new RemoteUnavailableError();
   }
@@ -101,7 +122,7 @@ export function mapRemoteError(error: PgError, status?: number): Error {
     if (/exercise_id_training_id/.test(message)) return new IntegrityError('O exercício deste registro não pertence ao treino.');
     if (/training_events_team_id_player_id/.test(message)) return new IntegrityError('O atleta deste registro não existe.');
     if (/training_events_team_id_training_id/.test(message)) return new IntegrityError('O treino deste registro não existe.');
-    if (/lineup|libero/.test(message)) return new IntegrityError('Há atleta que não está mais no elenco.');
+    if (/lineup|libero|match_set|rallies|rally_actions/.test(message)) return new IntegrityError('Há atleta que não está mais no elenco.');
     if (/training_participants|trainings/.test(message)) return new IntegrityError('Há participante que não está mais no elenco.');
     if (/evaluations/.test(message)) return new IntegrityError('Este atleta não existe mais no elenco.');
     return new IntegrityError('A operação deixaria referências quebradas.');
@@ -172,7 +193,7 @@ export class SupabaseGateway implements DataGateway {
   }
 
   async load(): Promise<Workspace> {
-    const [players, evaluations, weights, lineups, starters, bench, trainings, participants, exercises, events] = await Promise.all([
+    const [players, evaluations, weights, lineups, starters, bench, trainings, participants, exercises, events, matches, sets, setStarters, rallies, rallyActions] = await Promise.all([
       this.fetchAll('players', ['created_at', 'id']),
       this.fetchAll('evaluations', ['created_at', 'id']),
       this.fetchAll('overall_weights', ['position']),
@@ -183,7 +204,18 @@ export class SupabaseGateway implements DataGateway {
       this.fetchAll('training_participants', ['training_id', 'player_id']),
       this.fetchAll('training_exercises', ['training_id', 'sort_order', 'id']),
       this.fetchAll('training_events', ['recorded_at', 'id']),
+      this.fetchAll('matches', ['created_at', 'id']),
+      this.fetchAll('match_sets', ['match_id', 'number']),
+      this.fetchAll('match_set_starters', ['match_id', 'set_number', 'slot']),
+      this.fetchAll('rallies', ['match_id', 'set_number', 'seq', 'recorded_at', 'id']),
+      this.fetchAll('rally_actions', ['recorded_at', 'id']),
     ]);
+
+    const startersBySet = new Map<string, SetStarterRow[]>();
+    for (const row of setStarters) {
+      const setKey = `${row.match_id}\u0001${row.set_number}`;
+      startersBySet.set(setKey, [...(startersBySet.get(setKey) ?? []), row]);
+    }
 
     const group = <R extends { lineup_id?: string; training_id?: string }>(rows: R[], key: 'lineup_id' | 'training_id') => {
       const map = new Map<string, R[]>();
@@ -209,6 +241,10 @@ export class SupabaseGateway implements DataGateway {
       ),
       exercises: exercises.map(exerciseFromRow),
       trainingEvents: events.map(eventFromRow),
+      matches: matches.map(matchFromRow),
+      matchSets: sets.map((row) => setFromRows(row, startersBySet.get(`${row.match_id}\u0001${row.number}`) ?? [])),
+      rallies: rallies.map(rallyFromRow),
+      rallyActions: rallyActions.map(rallyActionFromRow),
     };
   }
 
@@ -280,7 +316,7 @@ export class SupabaseGateway implements DataGateway {
    * Excluir sem permissão NÃO dá erro no banco: a RLS esconde a linha e nada é apagado. Para não tratar isso como
    * sucesso, confere se a linha ainda existe: se existe e nada foi apagado, foi recusado.
    */
-  private async deleteRow(table: 'lineups' | 'trainings', id: string, denied: string): Promise<void> {
+  private async deleteRow(table: 'lineups' | 'trainings' | 'matches', id: string, denied: string): Promise<void> {
     const deleted = await guard(() => this.client.from(table).delete().eq('team_id', this.teamId).eq('id', id).select('id'));
     check(deleted);
     if ((deleted.data ?? []).length > 0) return;
@@ -369,6 +405,132 @@ export class SupabaseGateway implements DataGateway {
     const row = ((current.data ?? []) as Pick<EventRow, 'id' | 'voided_at'>[])[0];
     if (!row) throw new IntegrityError('O registro a desfazer não existe.');
     if (row.voided_at === null) throw new PermissionDeniedError('Seu papel na equipe não permite desfazer este registro.');
+  }
+
+  /* ───────── partidas ───────── */
+
+  private async selectMatchRow(matchId: string): Promise<MatchRow | null> {
+    const result = await guard(() => this.client.from('matches').select('*').eq('team_id', this.teamId).eq('id', matchId));
+    check(result);
+    return ((result.data ?? []) as MatchRow[])[0] ?? null;
+  }
+
+  private async requireMatch(matchId: string): Promise<Match> {
+    const row = await this.selectMatchRow(matchId);
+    if (!row) throw new IntegrityError('Esta partida não existe mais.');
+    return matchFromRow(row);
+  }
+
+  async saveMatch(match: Match): Promise<Match> {
+    const existing = await this.selectMatchRow(match.id);
+    if (!existing) {
+      check(await guard(() => this.client.from('matches').insert(matchToInsertRow(this.teamId, match))));
+    } else {
+      const updated = await guard(() => this.client.from('matches').update(matchToUpdateRow(match)).eq('team_id', this.teamId).eq('id', match.id).select('id'));
+      check(updated);
+      if ((updated.data ?? []).length === 0) throw new PermissionDeniedError('Seu papel na equipe não permite editar partidas.');
+    }
+    return this.requireMatch(match.id);
+  }
+
+  async deleteMatch(matchId: string): Promise<void> {
+    await this.deleteRow('matches', matchId, 'Seu papel na equipe não permite excluir partidas.');
+  }
+
+  /** Chama uma função do banco (transação única) e traduz o erro. */
+  private async call(name: 'start_set' | 'record_rally' | 'void_last_rally' | 'cancel_empty_set' | 'conclude_match' | 'reopen_match' | 'add_rally_action' | 'void_rally_action', args: Record<string, unknown>): Promise<unknown> {
+    const result = await guard(() => this.client.rpc(name as never, args as never) as unknown as PromiseLike<PgResult & { data: unknown }>);
+    check(result);
+    return result.data;
+  }
+
+  async startSet(matchId: string, input: StartSetInput): Promise<{ set: MatchSet; match: Match }> {
+    await this.call('start_set', {
+      p_team: this.teamId,
+      p_match: matchId,
+      p_set: {
+        number: input.number,
+        first_server: input.firstServer,
+        libero_id: input.liberoId,
+        created_at: input.createdAt,
+        starters: input.starters.map((s) => ({ slot: s.slot, player_id: s.playerId, role: s.role })),
+      },
+    });
+    const [setResult, starterResult] = await Promise.all([
+      guard(() => this.client.from('match_sets').select('*').eq('team_id', this.teamId).eq('match_id', matchId).eq('number', input.number)),
+      guard(() => this.client.from('match_set_starters').select('*').eq('team_id', this.teamId).eq('match_id', matchId).eq('set_number', input.number)),
+    ]);
+    check(setResult);
+    check(starterResult);
+    const setRow = ((setResult.data ?? []) as SetRow[])[0];
+    if (!setRow) throw new RemoteDataError('o set iniciado não foi encontrado');
+    return { set: setFromRows(setRow, (starterResult.data ?? []) as SetStarterRow[]), match: await this.requireMatch(matchId) };
+  }
+
+  async recordRally(matchId: string, input: RallyInput): Promise<{ rally: Rally; actions: RallyAction[]; duplicate: boolean }> {
+    const data = await this.call('record_rally', {
+      p_team: this.teamId,
+      p_match: matchId,
+      p_rally: {
+        id: input.id,
+        attempt_key: input.attemptKey,
+        set_number: input.setNumber,
+        expected_seq: input.expectedSeq,
+        winner: input.winner,
+        reason: input.reason,
+        player_id: input.playerId,
+        recorded_at: input.recordedAt,
+        actions: input.actions.map((a) => ({ id: a.id, attempt_key: a.attemptKey, player_id: a.playerId, fundamental: a.fundamental, outcome: a.outcome })),
+      },
+    });
+    const body = jsonRow(data, ['duplicate', 'rally', 'actions'], 'ponto registrado');
+    const rallyJson = jsonRow(body.rally, RALLY_KEYS, 'ponto registrado');
+    if (!Array.isArray(body.actions)) throw new RemoteDataError('ponto registrado: ações inesperadas');
+    return {
+      rally: rallyFromRow(rallyJson as unknown as RallyRow),
+      actions: body.actions.map((a) => rallyActionFromRow(jsonRow(a, ACTION_KEYS, 'ação técnica') as unknown as RallyActionRow)),
+      duplicate: body.duplicate === true,
+    };
+  }
+
+  /** `_voidedAt` existe só pelo contrato: o banco usa o próprio relógio para anular. */
+  async voidLastRally(matchId: string, rallyId: string, _voidedAt?: string): Promise<void> {
+    await this.call('void_last_rally', { p_team: this.teamId, p_match: matchId, p_rally: rallyId });
+  }
+
+  async cancelEmptySet(matchId: string, number: number): Promise<Match> {
+    await this.call('cancel_empty_set', { p_team: this.teamId, p_match: matchId, p_number: number });
+    return this.requireMatch(matchId);
+  }
+
+  async concludeMatch(matchId: string, _concludedAt?: string): Promise<Match> {
+    await this.call('conclude_match', { p_team: this.teamId, p_match: matchId });
+    return this.requireMatch(matchId);
+  }
+
+  async reopenMatch(matchId: string): Promise<Match> {
+    await this.call('reopen_match', { p_team: this.teamId, p_match: matchId });
+    return this.requireMatch(matchId);
+  }
+
+  async addRallyAction(input: ActionInput & { rallyId: string; recordedAt: string }): Promise<RallyAction> {
+    const data = await this.call('add_rally_action', {
+      p_team: this.teamId,
+      p_action: {
+        id: input.id,
+        attempt_key: input.attemptKey,
+        rally_id: input.rallyId,
+        player_id: input.playerId,
+        fundamental: input.fundamental,
+        outcome: input.outcome,
+        recorded_at: input.recordedAt,
+      },
+    });
+    return rallyActionFromRow(jsonRow(data, ACTION_KEYS, 'ação técnica') as unknown as RallyActionRow);
+  }
+
+  async voidRallyAction(actionId: string, _voidedAt?: string): Promise<void> {
+    await this.call('void_rally_action', { p_team: this.teamId, p_action: actionId });
   }
 
   /* ───────── recursos que só existem com dados locais ───────── */

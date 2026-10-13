@@ -41,27 +41,6 @@ export function ComingSoonPage({ title, subtitle, icon, planned, meanwhile }: Co
   );
 }
 
-export function MatchesPage() {
-  return (
-    <ComingSoonPage
-      title="Partidas"
-      subtitle="Central de partidas, sets e rallies"
-      icon="court"
-      planned={[
-        'Placar por set, com saque e rotação em quadra.',
-        'Registro de cada rally e do motivo do ponto: ace, ataque, bloqueio, erro de saque e outros.',
-        'Correção de registros sem apagar o histórico.',
-        'Regras de pontuação compatíveis com o formato da competição.',
-      ]}
-      meanwhile={{
-        text: 'Já é possível montar e salvar escalações, com ordem de saque e rotação.',
-        to: PATHS.lineups,
-        label: 'Montar escalação',
-      }}
-    />
-  );
-}
-
 export function StatsPage() {
   return (
     <ComingSoonPage

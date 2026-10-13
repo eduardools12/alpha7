@@ -1,5 +1,18 @@
 import { ATTRIBUTE_KEYS, validateAttributes } from '@/domain/attributes';
 import { isFundamental, toFundamentalResult } from '@/domain/fundamentals';
+import {
+  MATCH_STATUSES,
+  RALLY_REASONS,
+  SIDES,
+  matchState,
+  nextContext,
+  reasonProblem,
+  validateFormat,
+  type Match,
+  type MatchSet,
+  type Rally,
+  type RallyAction,
+} from '@/domain/match';
 import { COURT_SLOTS, FORMATIONS, type Formation, type Lineup, type LineupStarter } from '@/domain/lineup';
 import { MAX_WEIGHT, validatePositionWeights, type OverallWeights } from '@/domain/overall';
 import { PLAYER_STATUSES, UNIFORM_COLORS, type Evaluation, type Player } from '@/domain/player';
@@ -49,6 +62,10 @@ export interface WorkspaceSummary {
   trainingEvents: number;
   /** Registros desfeitos (anulados), preservados no histórico. */
   trainingEventsVoided: number;
+  /** Partidas, pontos válidos de partida (não anulados) e ações técnicas válidas de partida. */
+  matches: number;
+  rallies: number;
+  rallyActions: number;
   /** Quantidade de registros marcados como demonstração, em todas as coleções. */
   demoRecords: number;
   /** Quantidade de registros criados pela equipe (não demonstração). */
@@ -72,8 +89,12 @@ export function summarizeWorkspace(ws: Workspace): WorkspaceSummary {
     exercises: ws.exercises.length,
     trainingEvents: ws.trainingEvents.length - voided,
     trainingEventsVoided: voided,
+    matches: ws.matches.length,
+    rallies: ws.rallies.filter((r) => r.voidedAt === null).length,
+    rallyActions: ws.rallyActions.filter((a) => a.voidedAt === null).length,
     demoRecords: flags.filter(Boolean).length,
-    realRecords: flags.filter((d) => !d).length,
+    // Partidas só existem se a equipe as criou: nunca há partida de demonstração.
+    realRecords: flags.filter((d) => !d).length + ws.matches.length,
   };
 }
 
@@ -107,7 +128,14 @@ export function workspaceFingerprint(ws: Workspace): string {
 
 /** Apenas as coleções persistidas, na forma que vai para o arquivo. */
 function workspaceBody(ws: Workspace) {
+  // As coleções de partidas entram só quando há partidas: assim, dados e backups anteriores (sem partidas) mantêm
+  // exatamente o mesmo conteúdo, checksum e impressão digital. Mudança ADITIVA do formato (docs/DATA_SAFETY.md).
+  const matchData =
+    ws.matches.length > 0
+      ? { matches: ws.matches, matchSets: ws.matchSets, rallies: ws.rallies, rallyActions: ws.rallyActions }
+      : {};
   return {
+    ...matchData,
     players: ws.players,
     evaluations: ws.evaluations,
     lineups: ws.lineups,
@@ -236,7 +264,7 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
     return { ok: false, errors: issues.errors, totalErrors: issues.totalErrors };
   }
 
-  const sizes = ['players', 'evaluations', 'lineups', 'trainings', 'exercises', 'trainingEvents'].map((k) =>
+  const sizes = ['players', 'evaluations', 'lineups', 'trainings', 'exercises', 'trainingEvents', 'matches', 'matchSets', 'rallies', 'rallyActions'].map((k) =>
     Array.isArray(raw[k]) ? (raw[k] as unknown[]).length : 0,
   );
   if (sizes.reduce((a, b) => a + b, 0) > MAX_RECORDS) {
@@ -536,6 +564,200 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
     }
   });
 
+  /* Partidas (coleções opcionais: arquivos anteriores à v0.5 não as têm) */
+  const lineupIds = new Set(lineups.map((l) => l.id));
+  const matches: Match[] = [];
+  const noteMatch = ids('partidas');
+  (raw.matches === undefined ? [] : listOf(raw.matches, 'matches', issues)).forEach((rec, i) => {
+    const where = `Partida ${i + 1}`;
+    const r = reader(rec, where, issues, ['id', 'opponent', 'competition', 'scheduledAt', 'venue', 'lineupId', 'format', 'status', 'finalSetsUs', 'finalSetsThem', 'concludedAt', 'createdAt', 'updatedAt']);
+    const id = r.id();
+    noteMatch(id, where);
+    const opponent = r.text('opponent', { min: 2, max: 200, trimmed: true });
+    const competition = r.text('competition', { max: 500 });
+    const scheduledAt = r.text('scheduledAt', { max: 100 });
+    if (scheduledAt !== undefined && scheduledAt !== '' && !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(scheduledAt)) r.fail('scheduledAt', 'deve ser vazio ou AAAA-MM-DDTHH:mm.');
+    const venue = r.text('venue', { max: 500 });
+    let lineupId: string | null | undefined;
+    if (rec.lineupId === null) lineupId = null;
+    else if (typeof rec.lineupId === 'string' && lineupIds.has(rec.lineupId)) lineupId = rec.lineupId;
+    else r.fail('lineupId', 'deve ser nulo ou o id de uma escalação existente no backup.');
+    let format: Match['format'] | undefined;
+    if (!isRec(rec.format)) r.fail('format', 'deve ser um objeto com o formato da partida.');
+    else {
+      const f = rec.format;
+      const candidate = { bestOf: f.bestOf, setPoints: f.setPoints, decidingSetPoints: f.decidingSetPoints, minLead: f.minLead } as Match['format'];
+      const problem = validateFormat(candidate);
+      if (problem) r.fail('format', problem);
+      else format = candidate;
+    }
+    const status = r.oneOf('status', MATCH_STATUSES);
+    const finalSetsUs = rec.finalSetsUs === null ? null : r.int('finalSetsUs', 0, 3);
+    const finalSetsThem = rec.finalSetsThem === null ? null : r.int('finalSetsThem', 0, 3);
+    const concludedAt = r.isoOrNull('concludedAt');
+    const createdAt = r.iso('createdAt');
+    const updatedAt = r.iso('updatedAt');
+    if (status !== undefined && finalSetsUs !== undefined && finalSetsThem !== undefined && concludedAt !== undefined) {
+      if ((finalSetsUs === null) !== (finalSetsThem === null)) r.fail('finalSetsUs', 'o resultado final deve ter os dois lados ou nenhum.');
+      if ((status === 'concluida') !== (finalSetsUs !== null && concludedAt !== null)) r.fail('status', 'partida concluída exige resultado e data de conclusão, e o contrário também.');
+    }
+    if (id !== undefined && opponent !== undefined && competition !== undefined && scheduledAt !== undefined && venue !== undefined && lineupId !== undefined && format && status && finalSetsUs !== undefined && finalSetsThem !== undefined && concludedAt !== undefined && createdAt && updatedAt) {
+      matches.push({ id, opponent, competition, scheduledAt, venue, lineupId, format, status, finalSetsUs, finalSetsThem, concludedAt, createdAt, updatedAt });
+    }
+  });
+  const matchById = new Map(matches.map((m) => [m.id, m]));
+
+  const matchSets: MatchSet[] = [];
+  (raw.matchSets === undefined ? [] : listOf(raw.matchSets, 'matchSets', issues)).forEach((rec, i) => {
+    const where = `Set ${i + 1}`;
+    const r = reader(rec, where, issues, ['matchId', 'number', 'firstServer', 'starters', 'liberoId', 'createdAt']);
+    const matchId = r.id('matchId');
+    const match = matchId !== undefined ? matchById.get(matchId) : undefined;
+    if (matchId !== undefined && !match) r.fail('matchId', `a partida "${matchId}" não existe no backup.`);
+    const number = r.int('number', 1, 5);
+    if (number !== undefined && match && number > match.format.bestOf) r.fail('number', 'o set não cabe no formato da partida.');
+    if (number !== undefined && matchId !== undefined && matchSets.some((s) => s.matchId === matchId && s.number === number)) r.fail('number', `o set ${number} aparece repetido na partida.`);
+    const firstServer = r.oneOf('firstServer', SIDES);
+    const createdAt = r.iso('createdAt');
+    let starters: MatchSet['starters'] | undefined;
+    if (!Array.isArray(rec.starters) || rec.starters.length !== 6) r.fail('starters', 'deve ter exatamente seis titulares.');
+    else {
+      const parsed: MatchSet['starters'] = [];
+      const used = new Set<string>();
+      const slots = new Set<number>();
+      let ok = true;
+      for (const s of rec.starters as unknown[]) {
+        if (!isRec(s) || typeof s.playerId !== 'string' || !Number.isInteger(s.slot) || (s.slot as number) < 0 || (s.slot as number) > 5 || !isCourtRole(s.role)) {
+          ok = false;
+          continue;
+        }
+        if (!playerIds.has(s.playerId)) {
+          r.fail('starters', `o atleta "${s.playerId}" não existe no backup.`);
+          ok = false;
+        }
+        if (used.has(s.playerId) || slots.has(s.slot as number)) ok = false;
+        used.add(s.playerId);
+        slots.add(s.slot as number);
+        parsed.push({ slot: s.slot as number, playerId: s.playerId, role: s.role });
+      }
+      if (!ok || parsed.length !== 6) r.fail('starters', 'cada posição de 0 a 5 deve ter um titular válido, sem atleta repetido.');
+      else starters = parsed.sort((a, b) => a.slot - b.slot);
+    }
+    let liberoId: string | null | undefined;
+    if (rec.liberoId === null) liberoId = null;
+    else if (typeof rec.liberoId === 'string' && playerIds.has(rec.liberoId) && !(starters ?? []).some((s) => s.playerId === rec.liberoId)) liberoId = rec.liberoId;
+    else r.fail('liberoId', 'deve ser nulo ou um atleta do backup fora dos seis titulares.');
+    if (match && matchId !== undefined && number !== undefined && firstServer && starters && liberoId !== undefined && createdAt) {
+      matchSets.push({ matchId, number, firstServer, starters, liberoId, createdAt });
+    }
+  });
+  for (const match of matches) {
+    const numbers = matchSets.filter((s) => s.matchId === match.id).map((s) => s.number).sort((a, b) => a - b);
+    if (numbers.some((n, index) => n !== index + 1)) issues.error(`Partida "${match.opponent}": os sets devem ser numerados em sequência a partir do 1.`);
+  }
+
+  const rallies: Rally[] = [];
+  const noteRally = ids('pontos de partida');
+  const rallyKeys = new Set<string>();
+  (raw.rallies === undefined ? [] : listOf(raw.rallies, 'rallies', issues)).forEach((rec, i) => {
+    const where = `Ponto de partida ${i + 1}`;
+    const r = reader(rec, where, issues, ['id', 'matchId', 'setNumber', 'seq', 'servingSide', 'winnerSide', 'rotation', 'serverPlayerId', 'reason', 'playerId', 'attemptKey', 'recordedAt', 'voidedAt']);
+    const id = r.id();
+    noteRally(id, where);
+    const matchId = r.id('matchId');
+    const setNumber = r.int('setNumber', 1, 5);
+    const setExists = matchId !== undefined && setNumber !== undefined && matchSets.some((s) => s.matchId === matchId && s.number === setNumber);
+    if (matchId !== undefined && setNumber !== undefined && !setExists) r.fail('setNumber', 'o set deste ponto não existe no backup.');
+    const seq = r.int('seq', 1, 10_000);
+    const servingSide = r.oneOf('servingSide', SIDES);
+    const winnerSide = r.oneOf('winnerSide', SIDES);
+    const rotation = r.int('rotation', 0, 10_000);
+    const attemptKey = r.text('attemptKey', { min: 1, max: 300, trimmed: true });
+    const recordedAt = r.iso('recordedAt');
+    const voidedAt = r.isoOrNull('voidedAt');
+    let serverPlayerId: string | null | undefined;
+    if (rec.serverPlayerId === null) serverPlayerId = null;
+    else if (typeof rec.serverPlayerId === 'string' && playerIds.has(rec.serverPlayerId)) serverPlayerId = rec.serverPlayerId;
+    else r.fail('serverPlayerId', 'deve ser nulo ou um atleta do backup.');
+    let playerId: string | null | undefined;
+    if (rec.playerId === null) playerId = null;
+    else if (typeof rec.playerId === 'string' && playerIds.has(rec.playerId)) playerId = rec.playerId;
+    else r.fail('playerId', 'deve ser nulo ou um atleta do backup.');
+    let reason: Rally['reason'] | undefined;
+    if (rec.reason === null) reason = null;
+    else if (typeof rec.reason === 'string' && (RALLY_REASONS as readonly string[]).includes(rec.reason)) reason = rec.reason as Rally['reason'];
+    else r.fail('reason', 'motivo desconhecido.');
+    if (attemptKey !== undefined) {
+      if (rallyKeys.has(attemptKey)) issues.error(`${where}: a chave de tentativa "${attemptKey}" aparece repetida (ponto duplicado).`);
+      rallyKeys.add(attemptKey);
+    }
+    if (servingSide && winnerSide && reason !== undefined) {
+      const problem = reasonProblem(reason, winnerSide, servingSide);
+      if (problem) r.fail('reason', problem);
+    }
+    if (id !== undefined && matchId !== undefined && setExists && setNumber !== undefined && seq !== undefined && servingSide && winnerSide && rotation !== undefined && serverPlayerId !== undefined && reason !== undefined && playerId !== undefined && attemptKey !== undefined && recordedAt && voidedAt !== undefined) {
+      rallies.push({ id, matchId, setNumber, seq, servingSide, winnerSide, rotation, serverPlayerId, reason, playerId, attemptKey, recordedAt, voidedAt });
+    }
+  });
+  // Coerência do placar: os pontos ATIVOS de cada set seguem a regra de saque e rotação, em sequência, e nenhum
+  // vem depois de o set estar encerrado. É o que garante que o placar derivado seja o mesmo em qualquer lugar.
+  for (const match of matches) {
+    const state = matchState(match, matchSets, rallies);
+    for (const set of state.sets) {
+      const label = `Partida "${match.opponent}", set ${set.set.number}`;
+      const walk = { ...set, rallies: [] as Rally[] };
+      let finished = false;
+      for (const rally of set.rallies) {
+        if (finished) {
+          issues.error(`${label}: há ponto registrado depois de o set estar encerrado.`);
+          break;
+        }
+        const context = nextContext(walk);
+        if (rally.seq !== context.seq) issues.error(`${label}: a numeração dos pontos deve ser sequencial (esperado ${context.seq}, veio ${rally.seq}).`);
+        else if (rally.servingSide !== context.servingSide || rally.rotation !== context.rotation || rally.serverPlayerId !== context.serverPlayerId) {
+          issues.error(`${label}, ponto ${rally.seq}: saque, rotação ou sacador não seguem a regra de rodízio.`);
+        }
+        walk.rallies.push(rally);
+        const us = walk.rallies.filter((x) => x.winnerSide === 'us').length;
+        const them = walk.rallies.length - us;
+        finished = (us >= set.target && us - them >= match.format.minLead) || (them >= set.target && them - us >= match.format.minLead);
+      }
+    }
+    if (match.status === 'concluida' && (match.finalSetsUs !== state.setsUs || match.finalSetsThem !== state.setsThem)) {
+      issues.error(`Partida "${match.opponent}": o resultado final (${String(match.finalSetsUs)} x ${String(match.finalSetsThem)}) não confere com os sets (${state.setsUs} x ${state.setsThem}).`);
+    }
+  }
+  const rallyById = new Map(rallies.map((x) => [x.id, x]));
+
+  const rallyActions: RallyAction[] = [];
+  const noteAction = ids('ações técnicas de partida');
+  const actionKeys = new Set<string>();
+  (raw.rallyActions === undefined ? [] : listOf(raw.rallyActions, 'rallyActions', issues)).forEach((rec, i) => {
+    const where = `Ação técnica de partida ${i + 1}`;
+    const r = reader(rec, where, issues, ['id', 'matchId', 'rallyId', 'playerId', 'fundamental', 'outcome', 'attemptKey', 'recordedAt', 'voidedAt']);
+    const id = r.id();
+    noteAction(id, where);
+    const matchId = r.id('matchId');
+    const rallyId = r.id('rallyId');
+    const playerId = r.id('playerId');
+    const attemptKey = r.text('attemptKey', { min: 1, max: 300, trimmed: true });
+    const recordedAt = r.iso('recordedAt');
+    const voidedAt = r.isoOrNull('voidedAt');
+    const result = toFundamentalResult(rec.fundamental, rec.outcome);
+    if (!result) r.fail('outcome', 'o resultado não é válido para o fundamento informado.');
+    const rally = rallyId !== undefined ? rallyById.get(rallyId) : undefined;
+    if (rallyId !== undefined && !rally) r.fail('rallyId', `o ponto "${rallyId}" não existe no backup.`);
+    if (rally && matchId !== undefined && rally.matchId !== matchId) r.fail('matchId', 'a partida da ação não é a do ponto.');
+    if (playerId !== undefined && !playerIds.has(playerId)) r.fail('playerId', `o atleta "${playerId}" não existe no backup.`);
+    if (attemptKey !== undefined) {
+      if (actionKeys.has(attemptKey)) issues.error(`${where}: a chave de tentativa "${attemptKey}" aparece repetida (ação duplicada).`);
+      actionKeys.add(attemptKey);
+    }
+    if (id !== undefined && rally && matchId !== undefined && rally.matchId === matchId && playerId !== undefined && playerIds.has(playerId) && result && attemptKey !== undefined && recordedAt && voidedAt !== undefined) {
+      rallyActions.push({ ...result, id, matchId, rallyId: rally.id, playerId, attemptKey, recordedAt, voidedAt });
+    }
+  });
+
   if (issues.totalErrors > 0 || !settings || activity === undefined) {
     if (issues.totalErrors === 0) issues.error('Workspace incompleto.');
     return { ok: false, errors: issues.errors, totalErrors: issues.totalErrors };
@@ -543,7 +765,7 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
 
   return {
     ok: true,
-    workspace: { players, evaluations, lineups, settings, activity, trainings, exercises, trainingEvents },
+    workspace: { players, evaluations, lineups, settings, activity, trainings, exercises, trainingEvents, matches, matchSets, rallies, rallyActions },
     warnings: issues.finish(),
   };
 }
