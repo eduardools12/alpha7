@@ -18,11 +18,32 @@ import { APP_VERSION } from '@/version';
 import { createBackup, validateWorkspace, type WorkspaceSummary, type WorkspaceValidation } from './backup';
 import { readLastBackup, writeLastBackup, type LastBackup } from './backupMeta';
 import { createDemoWorkspace, createEmptyWorkspace } from './demo';
-import { IntegrityError, StorageCorruptedError, type DataGateway, type SnapshotInfo, type StorageUsage } from './gateway';
+import {
+  IntegrityError,
+  StorageCorruptedError,
+  WorkspaceMissingError,
+  type DataGateway,
+  type RawCopy,
+  type SnapshotInfo,
+  type StorageUsage,
+} from './gateway';
 import { LocalStorageGateway } from './localStorageGateway';
 import type { Workspace } from './types';
 
-export type WorkspaceStatus = 'loading' | 'ready' | 'error';
+/**
+ * loading  → lendo o armazenamento.
+ * ready    → há workspace carregado.
+ * setup    → primeira utilização: a pessoa escolhe como começar (nada é criado antes disso).
+ * recovery → o workspace sumiu ou está ilegível, mas há sinais de uso anterior: a pessoa decide.
+ * error    → falha inesperada de leitura (tentar de novo).
+ */
+export type WorkspaceStatus = 'loading' | 'ready' | 'setup' | 'recovery' | 'error';
+
+/** Por que a recuperação foi aberta: workspace ausente com sinais de uso anterior, ou dado ilegível. */
+export type RecoveryReason = 'lost' | 'unreadable';
+
+/** Como começar um workspace novo. */
+export type StartKind = 'demo' | 'empty';
 
 export interface EvaluationInput {
   evaluatedAt: string;
@@ -51,6 +72,13 @@ export interface WorkspaceActions {
   exportBackup(): Promise<ExportedBackup>;
   /** Troca o workspace por um já validado (importação). Com cópia de segurança; ou tudo ou nada. */
   restoreWorkspace(workspace: Workspace, reason: string): Promise<void>;
+  /**
+   * Começa um workspace novo (demonstração ou vazio) depois de a pessoa escolher/confirmar na tela de
+   * início ou de recuperação. Se havia conteúdo ilegível, ele vai para a cópia de segurança antes.
+   */
+  startNew(kind: StartKind): Promise<void>;
+  /** Textos brutos que ainda existem e podem ser baixados para recuperação manual. */
+  recoveryCopies(): Promise<RawCopy[]>;
   /** Volta ao conteúdo anterior à última substituição. */
   undoLastReplacement(): Promise<void>;
   /** Texto bruto salvo, mesmo ilegível, para baixar uma cópia de emergência. */
@@ -103,9 +131,15 @@ export interface WorkspaceValue {
   snapshot: SnapshotInfo | null;
   /** Último backup exportado neste navegador (lembrete; fora do workspace). */
   lastBackup: LastBackup | null;
-  /** Mensagem amigável quando status === 'error'. */
+  /** Mensagem amigável quando status === 'error' ou quando o dado está ilegível. */
   error: string | null;
-  corrupted: boolean;
+  /** Preenchido quando status === 'recovery'. */
+  recoveryReason: RecoveryReason | null;
+  /**
+   * Quantas inconsistências a validação estrita achou nos dados carregados (0 = nenhuma). Não bloqueia
+   * o uso: avisa e leva para "Verificar integridade". Atualizado ao carregar/substituir, não a cada edição.
+   */
+  integrityProblems: number;
   /** false: sem armazenamento do navegador, as alterações se perdem ao recarregar. */
   persistent: boolean;
   data: Workspace;
@@ -118,6 +152,16 @@ const SAVE_FAILED = 'Não foi possível salvar. Verifique o espaço do navegador
 
 /** Violação de regra de negócio, com mensagem já própria para a pessoa. */
 export class DomainRuleError extends Error {}
+
+/** Número de inconsistências da validação estrita (0 se íntegro ou se a validação não pôde rodar). */
+function countProblems(workspace: Workspace): number {
+  try {
+    const checked = validateWorkspace(JSON.parse(JSON.stringify(workspace)) as unknown);
+    return checked.ok ? 0 : checked.totalErrors;
+  } catch {
+    return 0;
+  }
+}
 
 /** Garante que a mensagem mostrada à pessoa seja compreensível, sem vazar detalhes técnicos. */
 async function guarded<T>(work: () => Promise<T>): Promise<T> {
@@ -135,7 +179,8 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
   const [gw] = useState<DataGateway>(() => gateway ?? new LocalStorageGateway());
   const [status, setStatus] = useState<WorkspaceStatus>('loading');
   const [error, setError] = useState<string | null>(null);
-  const [corrupted, setCorrupted] = useState(false);
+  const [recoveryReason, setRecoveryReason] = useState<RecoveryReason | null>(null);
+  const [integrityProblems, setIntegrityProblems] = useState(0);
   const [data, setData] = useState<Workspace>(() => createEmptyWorkspace());
   const [snapshot, setSnapshot] = useState<SnapshotInfo | null>(null);
   const [lastBackup, setLastBackup] = useState<LastBackup | null>(() => readLastBackup());
@@ -151,21 +196,37 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
     }
   }, [gw]);
 
+  /** Um workspace foi carregado ou colocado no lugar: a tela passa a mostrá-lo. */
+  const applyLoaded = useCallback((workspace: Workspace) => {
+    setData(workspace);
+    setError(null);
+    setRecoveryReason(null);
+    setIntegrityProblems(countProblems(workspace));
+    setStatus('ready');
+  }, []);
+
   const load = useCallback(async () => {
     setStatus('loading');
     try {
-      setData(await gw.load());
-      setError(null);
-      setCorrupted(false);
-      setStatus('ready');
+      applyLoaded(await gw.load());
     } catch (cause) {
-      const isCorrupt = cause instanceof StorageCorruptedError;
-      setCorrupted(isCorrupt);
-      setError(isCorrupt ? cause.message : 'Não foi possível abrir os dados salvos.');
-      setStatus('error');
+      // Nunca cria dados aqui: ausência e dado ilegível só levam a telas em que a PESSOA decide.
+      if (cause instanceof WorkspaceMissingError) {
+        setError(null);
+        setRecoveryReason(cause.kind === 'lost' ? 'lost' : null);
+        setStatus(cause.kind === 'lost' ? 'recovery' : 'setup');
+      } else if (cause instanceof StorageCorruptedError) {
+        setError(cause.message);
+        setRecoveryReason('unreadable');
+        setStatus('recovery');
+      } else {
+        setError('Não foi possível abrir os dados salvos.');
+        setRecoveryReason(null);
+        setStatus('error');
+      }
     }
     void refreshSnapshot();
-  }, [gw, refreshSnapshot]);
+  }, [gw, refreshSnapshot, applyLoaded]);
 
   useEffect(() => {
     void load();
@@ -173,22 +234,19 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
   // Outra aba mudou os dados: recarrega em silêncio (sem piscar a tela de carregamento) para não
   // trabalhar em cima de uma cópia velha, que depois poderia sobrescrever o que a outra aba fez.
+  // Se os dados sumiram ou ficaram ilegíveis, esta aba mantém o que tem na tela e as gravações são
+  // recusadas (o gateway não recria dados); recarregar a página abre a recuperação.
   useEffect(
     () =>
       gw.subscribe(() => {
         gw.load()
           .then((fresh) => {
-            setData(fresh);
-            setError(null);
-            setCorrupted(false);
-            setStatus('ready');
+            applyLoaded(fresh);
             void refreshSnapshot();
           })
-          .catch(() => {
-            /* se o dado ficou ilegível, o próximo carregamento mostra o aviso */
-          });
+          .catch(() => undefined);
       }),
-    [gw, refreshSnapshot],
+    [gw, refreshSnapshot, applyLoaded],
   );
 
   // Pede ao navegador que não apague os dados sozinho quando faltar espaço. Pode ser negado: tudo bem.
@@ -200,10 +258,7 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
     /** Troca o workspace inteiro. A cópia de segurança é feita pelo gateway antes de gravar. */
     const replace = async (next: Workspace, reason: string) => {
       await guarded(() => gw.replaceWorkspace(next, reason));
-      setData(next);
-      setError(null);
-      setCorrupted(false);
-      setStatus('ready');
+      applyLoaded(next);
       await refreshSnapshot();
     };
 
@@ -421,16 +476,21 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
 
       restoreWorkspace: (workspace, reason) => replace(workspace, reason),
 
+      startNew: (kind) =>
+        replace(
+          kind === 'demo' ? createDemoWorkspace() : createEmptyWorkspace(),
+          kind === 'demo' ? 'início com dados de demonstração' : 'início com workspace vazio',
+        ),
+
       async undoLastReplacement() {
         await guarded(() => gw.restoreSnapshot());
-        setData(await gw.load());
-        setError(null);
-        setCorrupted(false);
-        setStatus('ready');
+        applyLoaded(await gw.load());
         await refreshSnapshot();
       },
 
       readRawData: () => gw.exportRaw(),
+
+      recoveryCopies: () => gw.recoveryCopies(),
 
       usage: () => gw.usage(),
 
@@ -439,11 +499,11 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
         return validateWorkspace(JSON.parse(JSON.stringify(fresh)) as unknown);
       },
     };
-  }, [gw, data, load]);
+  }, [gw, data, load, applyLoaded]);
 
   const value = useMemo<WorkspaceValue>(
-    () => ({ status, snapshot, lastBackup, error, corrupted, persistent: gw.persistent, data, actions }),
-    [status, snapshot, lastBackup, error, corrupted, gw, data, actions],
+    () => ({ status, snapshot, lastBackup, error, recoveryReason, integrityProblems, persistent: gw.persistent, data, actions }),
+    [status, snapshot, lastBackup, error, recoveryReason, integrityProblems, gw, data, actions],
   );
 
   return <WorkspaceContext.Provider value={value}>{children}</WorkspaceContext.Provider>;

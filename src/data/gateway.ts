@@ -16,6 +16,14 @@ export interface StorageUsage {
   snapshotChars: number;
 }
 
+/** Um texto bruto guardado que a pessoa pode baixar para recuperação manual (não é um backup restaurável). */
+export interface RawCopy {
+  id: 'current' | 'unreadable' | 'snapshot';
+  /** Descrição para a tela. */
+  label: string;
+  text: string;
+}
+
 /** Cópia de segurança automática feita antes de substituir o workspace. */
 export interface SnapshotInfo {
   savedAt: string;
@@ -37,6 +45,11 @@ export interface SnapshotInfo {
 export interface DataGateway {
   /** false quando o armazenamento do navegador não está disponível (dados só em memória). */
   readonly persistent: boolean;
+  /**
+   * Lê o workspace. NUNCA cria dados sozinho: se não existe workspace, falha com WorkspaceMissingError
+   * (`first-use` quando não há sinal de uso anterior; `lost` quando há). Dado ilegível falha com
+   * StorageCorruptedError. Quem decide o que fazer é a pessoa, na tela de início ou de recuperação.
+   */
   load(): Promise<Workspace>;
   savePlayer(player: Player): Promise<void>;
   addEvaluation(evaluation: Evaluation): Promise<void>;
@@ -55,6 +68,8 @@ export interface DataGateway {
   restoreSnapshot(): Promise<void>;
   /** Texto bruto salvo (mesmo ilegível), para baixar uma cópia mesmo com dados corrompidos. */
   exportRaw(): Promise<string | null>;
+  /** Todos os textos brutos que ainda existem (dados salvos, cópia do ilegível, cópia automática). Pode ser vazio. */
+  recoveryCopies(): Promise<RawCopy[]>;
   /** Avisa quando os dados mudam em OUTRA aba do navegador. Devolve a função que cancela. */
   subscribe(listener: () => void): () => void;
   /** Quanto do armazenamento do navegador os dados ocupam; null se não há armazenamento (só memória). */
@@ -86,6 +101,23 @@ export class StorageCorruptedError extends Error {
   constructor(detail: string) {
     super(`Os dados salvos neste navegador estão ilegíveis (${detail}).`);
     this.name = 'StorageCorruptedError';
+  }
+}
+
+/**
+ * Não há workspace salvo. `first-use`: nenhum sinal de uso anterior neste navegador (primeira
+ * utilização, ou dados do site apagados por inteiro: o localStorage não permite distinguir).
+ * `lost`: há sinais de uso anterior (marca de sessão, cópia de segurança, backup registrado ou cópia de
+ * dado ilegível), então o workspace sumiu e não deve ser trocado por demonstração sem a pessoa decidir.
+ */
+export class WorkspaceMissingError extends Error {
+  constructor(readonly kind: 'first-use' | 'lost') {
+    super(
+      kind === 'lost'
+        ? 'Os dados da equipe não foram encontrados neste navegador, mas há sinais de que já existiram.'
+        : 'Ainda não há dados neste navegador.',
+    );
+    this.name = 'WorkspaceMissingError';
   }
 }
 

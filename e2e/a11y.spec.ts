@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 /**
  * Auditoria automática (axe-core) de WCAG 2.0/2.1 A e AA: contraste, nomes acessíveis,

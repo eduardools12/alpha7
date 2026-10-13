@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, passFirstUseChoice, test } from './fixtures';
 
 const ROUTES = [
   '/',
@@ -176,6 +177,7 @@ test.describe('acessibilidade básica', () => {
     const context = await browser.newContext({ reducedMotion: 'reduce', baseURL: 'http://localhost:5174' });
     const page = await context.newPage();
     await page.goto('/elenco');
+    await passFirstUseChoice(page); // este contexto não usa o fixture de página
     const duration = await page.getByRole('link', { name: /Gabriel S\./ }).evaluate((el) => getComputedStyle(el).transitionDuration);
     expect(parseFloat(duration)).toBeLessThan(0.01);
     await context.close();

@@ -557,33 +557,3 @@ describe('Mudanças feitas em outra aba', () => {
     expect(await screen.findByText('19 jogadores')).toBeInTheDocument();
   });
 });
-
-describe('Dados ilegíveis: recuperação sem perder o conteúdo', () => {
-  async function openCorrupted() {
-    const storage = (await import('@/test/renderApp')).createMemoryStorage();
-    storage.setItem(STORAGE_KEY, '{conteudo quebrado');
-    const ctx = renderApp({ path: '/', storage });
-    await screen.findByText('Não foi possível abrir os dados');
-    return ctx;
-  }
-
-  it('explica que os dados não foram apagados e oferece baixar a cópia', async () => {
-    const ctx = await openCorrupted();
-    expect(screen.getByText(/Os dados não foram apagados/)).toBeInTheDocument();
-    await ctx.user.click(screen.getByRole('button', { name: 'Baixar cópia dos dados ilegíveis' }));
-    await waitFor(() => expect(downloads).toHaveLength(1));
-    expect(await downloads[0]!.text()).toBe('{conteudo quebrado');
-  });
-
-  it('recomeçar exige confirmação e guarda o conteúdo antigo como cópia de segurança', async () => {
-    const ctx = await openCorrupted();
-    await ctx.user.click(screen.getByRole('button', { name: 'Recomeçar com dados de demonstração' }));
-    expect(stored(ctx)).toBe('{conteudo quebrado'); // ainda nada mudou
-    expect(screen.getByText('Recomeçar com a demonstração?')).toBeInTheDocument();
-    await ctx.user.click(screen.getByRole('button', { name: 'Confirmar: recomeçar com demonstração' }));
-    await screen.findByRole('heading', { level: 1, name: 'Alpha7 Performance' });
-    expect(storedWorkspace(ctx).players).toHaveLength(18);
-    const snapshot = JSON.parse(ctx.storage.map.get(SNAPSHOT_KEY) ?? '{}') as { previousRaw: string };
-    expect(snapshot.previousRaw).toBe('{conteudo quebrado');
-  });
-});

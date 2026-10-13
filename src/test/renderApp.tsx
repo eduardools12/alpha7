@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { AppRoutes } from '@/app/App';
 import { createDemoWorkspace, createEmptyWorkspace } from '@/data/demo';
 import type { DataGateway } from '@/data/gateway';
-import { LocalStorageGateway } from '@/data/localStorageGateway';
+import { LocalStorageGateway, STORAGE_KEY } from '@/data/localStorageGateway';
 import { WorkspaceProvider } from '@/data/WorkspaceProvider';
 import type { Workspace } from '@/data/types';
 
@@ -32,11 +32,24 @@ interface RenderOptions {
   storage?: ReturnType<typeof createMemoryStorage>;
   /** Substitui o gateway (por exemplo, para simular falhas de gravação). */
   wrapGateway?: (gateway: LocalStorageGateway) => DataGateway;
+  /**
+   * Por padrão, se o armazenamento ainda não tem workspace, grava `workspace` (ou a demonstração) antes de
+   * abrir o app, como se a pessoa já tivesse escolhido como começar. `false` abre o navegador "sem nada":
+   * mostra a tela de primeira utilização ou de recuperação, conforme os sinais de uso anterior.
+   */
+  seed?: boolean;
 }
 
-export function renderApp({ path = '/', workspace, wrapGateway, storage: existing }: RenderOptions = {}) {
+/** Grava um workspace como se a pessoa já o tivesse criado (inclui a marca de uso anterior). */
+export function seedStorage(storage: ReturnType<typeof createMemoryStorage>, workspace: Workspace = demoWorkspace()) {
+  // replaceWorkspace é síncrono por dentro (não há await): a gravação termina antes de a promessa voltar.
+  void new LocalStorageGateway(storage).replaceWorkspace(structuredClone(workspace), 'teste');
+}
+
+export function renderApp({ path = '/', workspace, wrapGateway, storage: existing, seed = true }: RenderOptions = {}) {
   const storage = existing ?? createMemoryStorage();
-  const local = new LocalStorageGateway(storage, () => structuredClone(workspace ?? demoWorkspace()));
+  if (seed && storage.getItem(STORAGE_KEY) === null) seedStorage(storage, workspace);
+  const local = new LocalStorageGateway(storage);
   const gateway = wrapGateway ? wrapGateway(local) : local;
   const user = userEvent.setup();
   const utils = render(

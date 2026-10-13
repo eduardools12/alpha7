@@ -133,6 +133,9 @@ describe('Edição de jogador', () => {
     await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
 
     expect(await screen.findByText('Perfil atualizado.')).toBeInTheDocument();
+    // a confirmação não some no render seguinte à limpeza do estado do histórico
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    expect(screen.getByText('Perfil atualizado.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Gabriel Souza' })).toBeInTheDocument();
     expect(screen.getByText('Lesionado')).toBeInTheDocument();
 

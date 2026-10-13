@@ -5,15 +5,31 @@ import { cloneWeights, DEFAULT_OVERALL_WEIGHTS, validatePositionWeights, type Ov
 import { PLAYER_STATUSES, UNIFORM_COLORS, type Evaluation, type Player } from '@/domain/player';
 import { isPosition, POSITIONS } from '@/domain/positions';
 import { TRAINING_STATUSES, type Training, type TrainingEvent, type TrainingExercise } from '@/domain/training';
-import { createDemoWorkspace } from './demo';
 import { summarizeWorkspace } from './backup';
-import { IntegrityError, StorageCorruptedError, type DataGateway, type SnapshotInfo, type StorageUsage } from './gateway';
+import { LAST_BACKUP_KEY } from './backupMeta';
+import {
+  IntegrityError,
+  StorageCorruptedError,
+  WorkspaceMissingError,
+  type DataGateway,
+  type RawCopy,
+  type SnapshotInfo,
+  type StorageUsage,
+} from './gateway';
 import type { ActivitySnapshot, Settings, Workspace } from './types';
 
 export const STORAGE_KEY = 'alpha7.workspace.v1';
 export const CORRUPT_BACKUP_KEY = 'alpha7.workspace.v1.corrupt';
 /** Cópia automática do conteúdo anterior à última substituição (restaurar demo, apagar tudo, importar). */
 export const SNAPSHOT_KEY = 'alpha7.workspace.v1.snapshot';
+/**
+ * Marca de que este navegador JÁ teve um workspace (gravada junto com a primeira gravação e ao abrir
+ * dados existentes). Se a chave principal sumir mas a marca ficar, sabemos que algo se perdeu. Se o
+ * navegador apagar TODOS os dados do site, a marca some junto e o caso é indistinguível de primeiro uso.
+ */
+export const SEEN_KEY = 'alpha7.workspace.v1.seen';
+/** Chaves cuja presença indica uso anterior. */
+const PRIOR_SESSION_KEYS = [SEEN_KEY, SNAPSHOT_KEY, CORRUPT_BACKUP_KEY, LAST_BACKUP_KEY] as const;
 
 /** Estimativa prudente do limite do localStorage por site (varia por navegador; costuma ser ~5 milhões de caracteres). */
 export const STORAGE_LIMIT_CHARS = 5_000_000;
@@ -30,6 +46,9 @@ interface StoredSnapshot {
 const SCHEMA_VERSION = 1;
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+
+const NOT_FOUND_MESSAGE =
+  'Os dados salvos não foram encontrados neste navegador (apagados ou alterados fora do aplicativo?). Nada foi gravado. Recarregue a página para ver as opções de recuperação.';
 
 function browserStorage(): StorageLike | null {
   try {
@@ -174,6 +193,8 @@ function parseWorkspace(raw: string): Workspace {
  * Persistência em localStorage: provisória e local a um navegador. Não é o backend
  * definitivo (veja docs/DATA_MODEL.md) e NÃO sincroniza com a nuvem. Sem armazenamento
  * disponível, mantém tudo em memória.
+ *
+ * Nunca cria dados por conta própria: sem workspace, `load` falha e a interface pergunta o que fazer.
  */
 export class LocalStorageGateway implements DataGateway {
   readonly persistent: boolean;
@@ -181,27 +202,22 @@ export class LocalStorageGateway implements DataGateway {
   private memory: Workspace | null = null;
   private memorySnapshot: StoredSnapshot | null = null;
 
-  constructor(
-    storage: StorageLike | null = browserStorage(),
-    private readonly createSeed: () => Workspace = () => createDemoWorkspace(),
-  ) {
+  constructor(storage: StorageLike | null = browserStorage()) {
     this.storage = storage;
     this.persistent = storage !== null;
   }
 
   async load(): Promise<Workspace> {
     if (!this.storage) {
-      this.memory ??= this.createSeed();
+      if (!this.memory) throw new WorkspaceMissingError('first-use');
       return structuredClone(this.memory);
     }
     const raw = this.storage.getItem(STORAGE_KEY);
-    if (raw === null) {
-      const seed = this.createSeed();
-      this.write(seed);
-      return seed;
-    }
+    if (raw === null) throw new WorkspaceMissingError(this.hasPriorSession() ? 'lost' : 'first-use');
     try {
-      return parseWorkspace(raw);
+      const workspace = parseWorkspace(raw);
+      this.markSeen(); // dados criados antes da marca existir passam a tê-la
+      return workspace;
     } catch (error) {
       if (error instanceof StorageCorruptedError) {
         // Guarda uma cópia para recuperação manual antes de qualquer restauração.
@@ -281,12 +297,40 @@ export class LocalStorageGateway implements DataGateway {
     }
     const currentRaw = this.rawCurrent();
     if (currentRaw !== null) this.saveSnapshot(currentRaw, 'desfazer a última substituição');
-    if (this.storage) this.storage.setItem(STORAGE_KEY, snapshot.previousRaw);
-    else this.memory = restored;
+    if (this.storage) {
+      this.storage.setItem(STORAGE_KEY, snapshot.previousRaw);
+      this.markSeen();
+    } else this.memory = restored;
   }
 
   async exportRaw(): Promise<string | null> {
     return this.rawCurrent();
+  }
+
+  async recoveryCopies(): Promise<RawCopy[]> {
+    const copies: RawCopy[] = [];
+    const current = this.rawCurrent();
+    if (current !== null) copies.push({ id: 'current', label: 'Dados salvos neste navegador', text: current });
+    const unreadable = this.storage?.getItem(CORRUPT_BACKUP_KEY) ?? null;
+    if (unreadable !== null && unreadable !== current) {
+      copies.push({ id: 'unreadable', label: 'Cópia do conteúdo que não pôde ser lido', text: unreadable });
+    }
+    const snapshot = this.readSnapshot();
+    if (snapshot) copies.push({ id: 'snapshot', label: `Cópia de segurança automática (${snapshot.reason})`, text: snapshot.previousRaw });
+    return copies;
+  }
+
+  /** Há sinais de que este navegador já teve um workspace? (Não detecta tudo: ver DATA_SAFETY.md.) */
+  private hasPriorSession(): boolean {
+    return PRIOR_SESSION_KEYS.some((key) => this.storage?.getItem(key) != null);
+  }
+
+  private markSeen(): void {
+    try {
+      if (this.storage && this.storage.getItem(SEEN_KEY) === null) this.storage.setItem(SEEN_KEY, new Date().toISOString());
+    } catch {
+      /* sem espaço: a marca é um reforço, nunca pode impedir o uso */
+    }
   }
 
   subscribe(listener: () => void): () => void {
@@ -410,9 +454,14 @@ export class LocalStorageGateway implements DataGateway {
   }
 
   private current(): Workspace {
-    if (!this.storage) return (this.memory ??= this.createSeed());
+    if (!this.storage) {
+      if (!this.memory) throw new IntegrityError(NOT_FOUND_MESSAGE);
+      return this.memory;
+    }
     const raw = this.storage.getItem(STORAGE_KEY);
-    return raw === null ? this.createSeed() : parseWorkspace(raw);
+    // Nunca recria dados: se o workspace sumiu (outra aba, limpeza do navegador), a gravação é recusada.
+    if (raw === null) throw new IntegrityError(NOT_FOUND_MESSAGE);
+    return parseWorkspace(raw);
   }
 
   /** `mutate` pode devolver false para indicar "nada mudou" e evitar uma gravação inútil. */
@@ -428,5 +477,6 @@ export class LocalStorageGateway implements DataGateway {
       return;
     }
     this.storage.setItem(STORAGE_KEY, JSON.stringify({ version: SCHEMA_VERSION, ...workspace }));
+    this.markSeen();
   }
 }

@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test, type Download, type Page } from '@playwright/test';
+import type { Download, Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 test.use({ viewport: { width: 1280, height: 900 } });
 

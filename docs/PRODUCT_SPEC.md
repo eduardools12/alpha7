@@ -44,6 +44,7 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Partidas | Placar por set, saque e rotação, rallies com motivo do ponto, correções com histórico | Planejado |
 | Estatísticas | Taxas de ace, ataque, side-out, bloqueio; recepção A/B/C/erro; comparação de atacantes; exportar relatório | Planejado |
 | Dados | Persistência em localStorage, restaurar demonstração, apagar tudo (com painel de impacto, confirmação e desfazer) | Feito (provisório) |
+| Dados | Inicialização segura: sem workspace o app pergunta como começar (vazio, demonstração ou backup) ou abre a recuperação; nunca cria demonstração por conta própria | Feito (0.3.1). Não detecta toda perda de dados: ver DATA_SAFETY.md, seção 7 |
 | Dados | Backup em arquivo JSON com versão de formato e checksum; importação segura com prévia e confirmação; cópia automática antes de substituir; verificar integridade; lembrete de backup | Feito (v0.3). Ver `DATA_SAFETY.md` |
 | Dados | Supabase (Postgres, autenticação, imagens), multiusuário, sincronização | Planejado |
 

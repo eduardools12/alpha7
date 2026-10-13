@@ -1,6 +1,7 @@
 import { createDemoWorkspace, createEmptyWorkspace } from './demo';
-import { IntegrityError, StorageCorruptedError } from './gateway';
-import { CORRUPT_BACKUP_KEY, LocalStorageGateway, SNAPSHOT_KEY, STORAGE_KEY } from './localStorageGateway';
+import { IntegrityError, StorageCorruptedError, WorkspaceMissingError } from './gateway';
+import type { Workspace } from './types';
+import { CORRUPT_BACKUP_KEY, LocalStorageGateway, SEEN_KEY, SNAPSHOT_KEY, STORAGE_KEY } from './localStorageGateway';
 import { createUniformAttributes } from '@/domain/attributes';
 import { createEmptyLineup } from '@/domain/lineup';
 import { DEFAULT_OVERALL_WEIGHTS } from '@/domain/overall';
@@ -10,10 +11,26 @@ import { makeEvaluation, makeEvent, makeExercise, makePlayer, makeTraining } fro
 
 const NOW = new Date('2026-10-12T15:00:00');
 
-function setup() {
+/**
+ * Gateway com um workspace já criado (como se a pessoa tivesse escolhido como começar). O gateway nunca
+ * cria dados sozinho: sem isto, `load` falha com WorkspaceMissingError. A gravação é síncrona por dentro.
+ */
+function gatewayWith(workspace: Workspace) {
   const storage = createMemoryStorage();
-  const gateway = new LocalStorageGateway(storage, () => createDemoWorkspace(NOW));
+  const gateway = new LocalStorageGateway(storage);
+  void gateway.replaceWorkspace(structuredClone(workspace), 'teste');
   return { storage, gateway };
+}
+
+/** O mesmo, sem armazenamento do navegador (tudo em memória). */
+function memoryGatewayWith(workspace: Workspace) {
+  const gateway = new LocalStorageGateway(null);
+  void gateway.replaceWorkspace(structuredClone(workspace), 'teste');
+  return { gateway };
+}
+
+function setup() {
+  return gatewayWith(createDemoWorkspace(NOW));
 }
 
 describe('dados de demonstração', () => {
@@ -98,11 +115,9 @@ describe('treinos de demonstração', () => {
 
 describe('LocalStorageGateway: treinos, exercícios e eventos', () => {
   function fresh() {
-    const storage = createMemoryStorage();
     const base = createEmptyWorkspace();
     base.players = [makePlayer({ id: 'p1', jerseyNumber: 1 }), makePlayer({ id: 'p2', jerseyNumber: 2 })];
-    const gateway = new LocalStorageGateway(storage, () => structuredClone(base));
-    return { storage, gateway };
+    return gatewayWith(base);
   }
   const training = makeTraining({ id: 'tr', participantIds: ['p1'] });
   const ex = makeExercise('tr', { id: 'ex' });
@@ -336,7 +351,7 @@ describe('LocalStorageGateway: treinos, exercícios e eventos', () => {
   it('sem armazenamento do navegador, treinos e registros funcionam em memória', async () => {
     const base = createEmptyWorkspace();
     base.players = [makePlayer({ id: 'p1' })];
-    const gateway = new LocalStorageGateway(null, () => structuredClone(base));
+    const { gateway } = memoryGatewayWith(base);
     await gateway.load();
     await gateway.saveTraining(training, [ex]);
     await gateway.addTrainingEvent(event());
@@ -346,9 +361,7 @@ describe('LocalStorageGateway: treinos, exercícios e eventos', () => {
 
 describe('LocalStorageGateway: substituição segura do workspace', () => {
   function setup() {
-    const storage = createMemoryStorage();
-    const gateway = new LocalStorageGateway(storage, () => createDemoWorkspace(NOW));
-    return { storage, gateway };
+    return gatewayWith(createDemoWorkspace(NOW));
   }
   const rawOf = (storage: ReturnType<typeof createMemoryStorage>) => storage.getItem(STORAGE_KEY);
 
@@ -464,7 +477,7 @@ describe('LocalStorageGateway: substituição segura do workspace', () => {
   });
 
   it('sem armazenamento do navegador, a substituição e o desfazer funcionam em memória', async () => {
-    const gateway = new LocalStorageGateway(null, () => createDemoWorkspace(NOW));
+    const { gateway } = memoryGatewayWith(createDemoWorkspace(NOW));
     await gateway.load();
     await gateway.replaceWorkspace(createEmptyWorkspace(), 'apagar');
     expect((await gateway.load()).players).toEqual([]);
@@ -502,8 +515,7 @@ describe('LocalStorageGateway: substituição segura do workspace', () => {
   });
 
   it('subscribe avisa quando OUTRA aba altera os dados (evento storage) e pode ser cancelado', async () => {
-    const storage = createMemoryStorage();
-    const gateway = new LocalStorageGateway(storage, () => createDemoWorkspace(NOW));
+    const { gateway } = setup();
     const listener = vi.fn();
     const stop = gateway.subscribe(listener);
     window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
@@ -615,11 +627,123 @@ describe('LocalStorageGateway', () => {
 
   describe('sem armazenamento do navegador', () => {
     it('funciona só em memória e informa persistent=false', async () => {
-      const gateway = new LocalStorageGateway(null, () => createDemoWorkspace(NOW));
+      const { gateway } = memoryGatewayWith(createDemoWorkspace(NOW));
       expect(gateway.persistent).toBe(false);
       await gateway.load();
       await gateway.savePlayer(makePlayer({ id: 'm1', jerseyNumber: 77 }));
       expect((await gateway.load()).players.some((p) => p.id === 'm1')).toBe(true);
     });
+  });
+});
+
+describe('LocalStorageGateway: inicialização nunca cria dados sozinha', () => {
+  const missing = async (gateway: LocalStorageGateway) => {
+    try {
+      await gateway.load();
+    } catch (error) {
+      return error;
+    }
+    return null;
+  };
+
+  it('sem workspace e sem sinais de uso: primeira utilização, e nada é gravado', async () => {
+    const storage = createMemoryStorage();
+    const error = await missing(new LocalStorageGateway(storage));
+    expect(error).toBeInstanceOf(WorkspaceMissingError);
+    expect((error as WorkspaceMissingError).kind).toBe('first-use');
+    expect(storage.map.size).toBe(0);
+  });
+
+  it('carregar repetidamente sem workspace continua sem gravar nada', async () => {
+    const storage = createMemoryStorage();
+    const gateway = new LocalStorageGateway(storage);
+    for (let i = 0; i < 3; i += 1) await missing(gateway);
+    expect(storage.map.size).toBe(0);
+  });
+
+  it.each([
+    ['a marca de uso', SEEN_KEY, 'x'],
+    ['a cópia de segurança', SNAPSHOT_KEY, '{}'],
+    ['a cópia do dado ilegível', CORRUPT_BACKUP_KEY, 'x'],
+    ['o registro do último backup', 'alpha7.lastBackup.v1', '{}'],
+  ])('%s indica workspace perdido (lost), sem recriar nada', async (_label, key, value) => {
+    const storage = createMemoryStorage();
+    storage.setItem(key, value);
+    const before = new Map(storage.map);
+    const error = await missing(new LocalStorageGateway(storage));
+    expect((error as WorkspaceMissingError).kind).toBe('lost');
+    expect(new Map(storage.map)).toEqual(before);
+    expect(storage.map.has(STORAGE_KEY)).toBe(false);
+  });
+
+  it('a primeira gravação deixa a marca de uso, e perder só a chave principal vira "lost"', async () => {
+    const { storage, gateway } = setup();
+    expect(storage.getItem(SEEN_KEY)).not.toBeNull();
+    storage.removeItem(STORAGE_KEY);
+    const error = await missing(gateway);
+    expect((error as WorkspaceMissingError).kind).toBe('lost');
+  });
+
+  it('abrir dados existentes grava a marca (dados de versões anteriores) sem tocar no workspace', async () => {
+    const { storage, gateway } = setup();
+    storage.removeItem(SEEN_KEY);
+    const before = storage.getItem(STORAGE_KEY);
+    await gateway.load();
+    expect(storage.getItem(SEEN_KEY)).not.toBeNull();
+    expect(storage.getItem(STORAGE_KEY)).toBe(before);
+  });
+
+  it('se a marca não puder ser gravada, o uso segue normalmente', async () => {
+    const storage = createMemoryStorage();
+    const realSet = storage.setItem;
+    storage.setItem = (key: string, value: string) => {
+      if (key === SEEN_KEY) throw new Error('QuotaExceededError');
+      realSet(key, value);
+    };
+    const gateway = new LocalStorageGateway(storage);
+    await expect(gateway.replaceWorkspace(createEmptyWorkspace(), 'teste')).resolves.toBeUndefined();
+    expect((await gateway.load()).players).toEqual([]);
+  });
+
+  it('dado ilegível continua sendo StorageCorruptedError e o texto original é preservado', async () => {
+    const storage = createMemoryStorage();
+    storage.setItem(STORAGE_KEY, '{quebrado');
+    await expect(new LocalStorageGateway(storage).load()).rejects.toBeInstanceOf(StorageCorruptedError);
+    expect(storage.getItem(STORAGE_KEY)).toBe('{quebrado');
+    expect(storage.getItem(CORRUPT_BACKUP_KEY)).toBe('{quebrado');
+  });
+
+  it('gravar depois que o workspace sumiu (outra aba, limpeza) é recusado e NÃO recria demonstração', async () => {
+    const { storage, gateway } = setup();
+    await gateway.load();
+    storage.removeItem(STORAGE_KEY);
+    await expect(gateway.savePlayer(makePlayer({ id: 'novo', jerseyNumber: 77 }))).rejects.toBeInstanceOf(IntegrityError);
+    await expect(gateway.saveSettings({ weights: DEFAULT_OVERALL_WEIGHTS })).rejects.toThrow(/não foram encontrados/);
+    await expect(gateway.deleteTraining('qualquer')).rejects.toBeInstanceOf(IntegrityError);
+    expect(storage.map.has(STORAGE_KEY)).toBe(false);
+  });
+
+  it('sem armazenamento do navegador: primeira utilização até a pessoa escolher; depois funciona em memória', async () => {
+    const gateway = new LocalStorageGateway(null);
+    await expect(gateway.load()).rejects.toBeInstanceOf(WorkspaceMissingError);
+    await gateway.replaceWorkspace(createEmptyWorkspace(), 'início');
+    expect((await gateway.load()).players).toEqual([]);
+  });
+
+  it('recoveryCopies lista só o que existe: dados salvos, cópia do ilegível e cópia automática', async () => {
+    const storage = createMemoryStorage();
+    expect(await new LocalStorageGateway(storage).recoveryCopies()).toEqual([]);
+
+    storage.setItem(STORAGE_KEY, '{quebrado');
+    const gateway = new LocalStorageGateway(storage);
+    await gateway.load().catch(() => undefined); // grava a cópia do ilegível (igual ao atual: não repete)
+    expect((await gateway.recoveryCopies()).map((c) => c.id)).toEqual(['current']);
+
+    await gateway.replaceWorkspace(createEmptyWorkspace(), 'recomeçar'); // o ilegível vai para a cópia automática
+    const ids = (await gateway.recoveryCopies()).map((c) => c.id);
+    expect(ids).toEqual(['current', 'unreadable', 'snapshot']);
+    const texts = Object.fromEntries((await gateway.recoveryCopies()).map((c) => [c.id, c.text]));
+    expect(texts.unreadable).toBe('{quebrado');
+    expect(texts.snapshot).toBe('{quebrado');
   });
 });

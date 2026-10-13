@@ -1,6 +1,6 @@
 # Alpha7 Volleyball Performance
 
-Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.3** (v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos; v0.3 = proteção dos dados: backup, importação segura, cópia automática). A versão vive em `src/version.ts` e deve ser igual à do `package.json` (há teste).
+Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.3.1** (v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos; v0.3 = proteção dos dados: backup, importação segura, cópia automática; 0.3.1 = inicialização e recuperação seguras: nunca cria demonstração sozinha). A versão vive em `src/version.ts` e deve ser igual à do `package.json` (há teste).
 
 ## Estado atual (não declare como pronto o que está só planejado)
 
@@ -89,6 +89,7 @@ Regra de dependência: `domain` não importa nada de fora de `domain`. `data` im
 - Dados do `localStorage` são tratados como não confiáveis: o gateway valida o formato e recusa dados corrompidos (guarda cópia de recuperação).
 - **Proteção de dados (detalhes em `docs/DATA_SAFETY.md`):**
   - Toda substituição do workspace inteiro passa por `replaceWorkspace`, que guarda ANTES a cópia de segurança e aborta sem alterar nada se não conseguir. Nunca escreva em `alpha7.workspace.v1` por outro caminho.
+  - **O gateway nunca cria dados sozinho.** `load()` falha com `WorkspaceMissingError` (primeira utilização ou perdido) ou `StorageCorruptedError`; quem decide é a pessoa (tela de escolha ou de recuperação). Não reintroduza semeadura automática nem "se não existir, cria". Gravar sem workspace é recusado. O `localStorage` não detecta toda perda: não afirme o contrário.
   - Nunca descarte dados do usuário em silêncio: ação destrutiva = painel de impacto + recomendação de backup + confirmação explícita + desfazer.
   - Importação nunca mescla nem aplica JSON bruto: `parseBackup` reconstrói cada objeto só com campos conhecidos e rejeita o arquivo inteiro se algo falhar. O checksum detecta corrupção, não adulteração.
   - Mudou o formato dos dados? Aditivo e opcional não exige nova versão; qualquer outra mudança exige nova versão de esquema/formato **e** migração em `MIGRATIONS` com teste usando arquivo v1 fixo. Atualize `src/version.ts` junto com `package.json`.
@@ -111,4 +112,5 @@ Logo e uniformes oficiais: use os arquivos originais. `public/brand/original/` g
 - Responsivo de 360px a 1920px, sem rolagem horizontal (o `e2e/responsive.spec.ts` verifica; inclua a nova rota em `ROUTES`).
 - Tipos, testes e build passam; documentação (`docs/`) atualizada sem declarar como implementado o que é plano.
 - Troca de persistência: implemente `DataGateway` (`src/data/gateway.ts`); telas e domínio não mudam.
+- Testes: `renderApp` grava o workspace inicial antes de abrir o app (`seed: false` simula o navegador sem dados); nos testes do gateway use `gatewayWith`. Nos testes de navegador, `e2e/fixtures.ts` passa pela escolha de primeira utilização; só `e2e/startup.spec.ts` usa `@playwright/test` direto.
 - Ação que apaga ou substitui dados: nunca silenciosa; siga a regra de proteção de dados acima e teste cancelar, falha no meio e desfazer.

@@ -3,7 +3,8 @@
  * e não é restaurado por ele (descreve o que aconteceu neste navegador). Falhas de armazenamento
  * são ignoradas: o lembrete é só um conforto, nunca pode quebrar o aplicativo.
  */
-const KEY = 'alpha7.lastBackup.v1';
+export const LAST_BACKUP_KEY = 'alpha7.lastBackup.v1';
+const KEY = LAST_BACKUP_KEY;
 
 export interface LastBackup {
   /** Quando o arquivo foi exportado (ISO). */

@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
 import { AttributeBar } from '@/components/brand/AttributeBar';
@@ -34,12 +34,15 @@ export function PlayerProfilePage() {
   const { data } = useWorkspace();
   const location = useLocation();
   const navigate = useNavigate();
-  const flash = (location.state as { flash?: string } | null)?.flash;
+  const incoming = (location.state as { flash?: string } | null)?.flash;
+  // A confirmação fica guardada no componente: se dependesse do estado do histórico, ela sumiria no render
+  // seguinte à limpeza abaixo (a pessoa quase não a veria).
+  const [flash] = useState(incoming);
 
   // Mostra a confirmação uma vez: limpa o estado do histórico para que recarregar não a repita.
   useEffect(() => {
-    if (flash) navigate(location.pathname, { replace: true, state: null });
-  }, [flash, location.pathname, navigate]);
+    if (incoming) navigate(location.pathname, { replace: true, state: null });
+  }, [incoming, location.pathname, navigate]);
 
   const player = data.players.find((p) => p.id === playerId);
   const weights = data.settings.weights;

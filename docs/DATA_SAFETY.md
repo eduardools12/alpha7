@@ -1,8 +1,10 @@
 # Segurança dos dados
 
-Auditoria da persistência do Alpha7 antes do uso com dados reais da equipe, e as proteções implementadas na v0.3. Escrito a partir do código (`src/data/`, `src/features/settings/`) e dos testes; onde algo é limite ou risco que **continua existindo**, está dito.
+Auditoria da persistência do Alpha7 antes do uso com dados reais da equipe, e as proteções implementadas nas versões 0.3 e 0.3.1. Escrito a partir do código (`src/data/`, `src/features/settings/`) e dos testes; onde algo é limite ou risco que **continua existindo**, está dito.
 
 > **Resumo.** Os dados vivem só no `localStorage` deste navegador. Não há servidor, nuvem nem sincronização. Quem apaga os dados do navegador, troca de perfil/aparelho ou perde o disco perde tudo, **a não ser que tenha um backup em arquivo**. A v0.3 acrescenta backup e restauração validados, cópia de segurança automática antes de qualquer substituição, confirmação com descrição do impacto e verificação de integridade. A migração para o Supabase **não** foi iniciada.
+>
+> **Desde a 0.3.1 o aplicativo nunca cria dados de demonstração por conta própria.** Sem workspace, ele pergunta (primeira utilização) ou abre uma tela de recuperação (há sinais de que já existiu). Ver a seção 7. **Limite:** o `localStorage` não permite detectar toda perda de dados; se o navegador apagar tudo do site, o caso é indistinguível de uma primeira utilização.
 
 ## 1. Como os dados são guardados
 
@@ -10,10 +12,10 @@ Auditoria da persistência do Alpha7 antes do uso com dados reais da equipe, e a
 |---|---|
 | Onde | `localStorage` do navegador, por **origem** (endereço + porta). Outro endereço, navegador, perfil ou aparelho enxerga um workspace diferente (vazio ou de demonstração) |
 | Chave principal | `alpha7.workspace.v1` → JSON `{ version: 1, players, evaluations, lineups, settings, activity, trainings, exercises, trainingEvents }` |
-| Outras chaves | `…v1.snapshot` (cópia da última substituição), `…v1.corrupt` (cópia de dado ilegível), `alpha7.lastBackup.v1` (metadado do último backup). Ver [DATA_MODEL.md](DATA_MODEL.md) |
+| Outras chaves | `…v1.snapshot` (cópia da última substituição), `…v1.corrupt` (cópia de dado ilegível), `…v1.seen` (marca de que este navegador já teve um workspace), `alpha7.lastBackup.v1` (metadado do último backup). Ver [DATA_MODEL.md](DATA_MODEL.md) |
 | Gravação | Cada alteração regrava o JSON inteiro numa única chamada `setItem` (tudo ou nada) |
 | Limite | Cerca de 5 milhões de caracteres por site (varia por navegador). A tela Configurações mostra o uso e avisa a partir de 70% |
-| Sem armazenamento | Em modo restrito/privado o app funciona **só em memória** e avisa na faixa superior; fechar a aba perde tudo |
+| Sem armazenamento | Em modo restrito/privado o app funciona **só em memória** e avisa na faixa superior; fechar a aba perde tudo. Sem armazenamento não há como saber de uso anterior: sempre abre na escolha de primeira utilização |
 | Segredos | Nenhum. O app não usa chaves, tokens nem senhas; o backup não contém nenhum (há teste) |
 
 ## 2. Achados da auditoria (estado anterior à v0.3) e o que foi feito
@@ -25,13 +27,13 @@ Gravidade: **A** pode causar perda de dados reais; **M** pode causar perda ou da
 | 1 | **Não havia backup nem como tirar os dados do navegador.** Qualquer limpeza de dados do site, perfil novo ou troca de computador apagava histórico de avaliações e treinos | A | **Resolvido** parcialmente: exportação em arquivo (seção 4). Continua dependendo de a pessoa exportar e guardar o arquivo; há lembrete (seção 8) |
 | 2 | **"Restaurar demonstração" e "Apagar todos os dados" substituíam o workspace inteiro**, inclusive o que a equipe cadastrou, com um texto de confirmação genérico, sem recomendar backup e sem como voltar | A | **Resolvido**: painel com o impacto descrito, recomendação e botão de backup, caixa "Entendi…" quando há dados reais, e **cópia de segurança automática** com "Desfazer" (seção 6) |
 | 3 | **Excluir um treino apaga em cascata exercícios e todos os registros** (válidos e desfeitos). A tela informava as contagens, mas não havia volta | M | **Mitigado**: o gateway guarda a cópia de segurança antes de excluir (e aborta se não conseguir). "Desfazer última substituição" recupera. Só a última fica guardada |
-| 4 | **Se a chave principal sumisse** (navegador limpou o armazenamento, dado evicto), a próxima abertura **semeava a demonstração em silêncio**, parecendo um app novo | A | **Parcialmente mitigado**: pedimos armazenamento persistente (`navigator.storage.persist()`), mostramos se foi concedido e exibimos a faixa "Dados de demonstração" (com os números) sempre que o que está na tela é demonstração. **Risco residual**: o app não consegue distinguir "primeira vez" de "dados apagados". O lembrete de backup e o arquivo são a defesa real |
-| 5 | **Dado ilegível**: o app já recusava abrir e guardava cópia em `…corrupt`, mas a única saída era recomeçar | M | **Melhorado**: a tela de recuperação explica que nada foi apagado, permite **baixar o texto ilegível** e só então recomeçar (em dois passos). O texto antigo também vai para a cópia de segurança |
+| 4 | **Se a chave principal sumisse** (navegador limpou o armazenamento, dado evicto), a próxima abertura **semeava a demonstração em silêncio**, parecendo um app novo | A | **Resolvido nos casos detectáveis (0.3.1)**: o app não semeia mais nada. Primeira utilização = escolha explícita; workspace ausente com sinais de uso anterior ou dado ilegível = tela de recuperação (seção 7). Também pedimos armazenamento persistente (`navigator.storage.persist()`). **Limite que permanece**: se TODOS os dados do site forem apagados (inclusive a marca de uso), o app mostra a escolha de primeira utilização, e a pessoa só percebe pelo contexto. O backup em arquivo é a defesa real |
+| 5 | **Dado ilegível**: o app já recusava abrir e guardava cópia em `…corrupt`, mas a única saída era recomeçar | M | **Melhorado**: a tela de recuperação explica que nada foi apagado, permite **baixar o texto ilegível** e só então recomeçar (em dois passos). Na 0.3.1 ela também oferece importar backup, restaurar a cópia automática e tentar de novo (seção 7). O texto antigo também vai para a cópia de segurança |
 | 6 | **Leitura frágil**: ao abrir, o app só conferia o formato superficial (`looksLike…`). Vínculos quebrados (avaliação de atleta inexistente, evento de outro treino), camisas repetidas ou chaves duplicadas **passavam** | M | **Resolvido para o backup e para o diagnóstico**: a mesma validação estrita (seção 5) roda na exportação, na importação e em "Verificar integridade dos dados". **Não** bloqueia a abertura normal (evita travar quem já tem dados), mas a exportação **recusa** gerar backup de dado inconsistente e oferece baixar a cópia bruta |
 | 7 | **Pesos do Overall inválidos eram trocados em silêncio pelos padrões** ao abrir (`readWeights`) e gravados por cima na próxima alteração | M | **Aberto (baixo risco)**: só ocorre se o JSON salvo for editado à mão ou corrompido. O backup valida os pesos e **recusa** pesos inválidos em vez de trocá-los. Não alteramos o comportamento de abertura para não mudar funcionalidade sem necessidade |
 | 8 | **Duas abas abertas**: cada uma lê o workspace uma vez e regrava o conjunto inteiro; a última a gravar vence e pode apagar o que a outra fez | M | **Mitigado**: o app escuta o evento `storage` e recarrega em silêncio quando outra aba grava; `savePlayer` revalida a camisa única contra o dado atual. **Risco residual**: se as duas abas gravarem quase ao mesmo tempo, a última vence (sem bloqueio entre abas). Use uma aba por vez |
 | 9 | **Restaurar a demonstração zerava os pesos do Overall** personalizados | B | **Resolvido**: os pesos atuais são mantidos em "Restaurar demonstração" e em "Apagar tudo" |
-| 10 | **Sem versão do app visível**, difícil dizer de que versão veio um arquivo | B | **Resolvido**: `src/version.ts` (v0.3.0, igual ao `package.json`, com teste), exibida na barra lateral e gravada no backup |
+| 10 | **Sem versão do app visível**, difícil dizer de que versão veio um arquivo | B | **Resolvido**: `src/version.ts` (igual ao `package.json`, com teste; hoje 0.3.1), exibida na barra lateral e gravada no backup |
 | 11 | **Camisa única só era garantida na tela** do cadastro | B | **Resolvido**: o gateway recusa (`IntegrityError`) camisa já usada por outro atleta |
 
 ### O que cada ação destrutiva sobrescreve
@@ -69,7 +71,7 @@ Nome: `alpha7-backup-AAAA-MM-DD-HHmm.json` (data e hora **locais**, para dois ba
 {
   "format": "alpha7-backup",          // identifica o tipo de arquivo
   "formatVersion": 1,                  // versão do FORMATO do arquivo
-  "appVersion": "0.3.0",               // versão do app que exportou (informativa)
+  "appVersion": "0.3.1",               // versão do app que exportou (informativa)
   "workspaceSchemaVersion": 1,         // versão do esquema dos dados
   "exportedAt": "2026-10-12T21:05:00.000Z",
   "counts": { "players": 18, "evaluations": 40, ... },   // para a prévia e conferência
@@ -127,17 +129,51 @@ Regra para evoluir: campo novo **opcional/aditivo** não exige mudar a versão (
 - A cópia ocupa espaço do mesmo limite do navegador (mostrado na tela).
 - **A cópia não substitui o backup em arquivo**: vive no mesmo navegador e some junto com ele.
 
-## 7. Restaurar demonstração (protegido)
+## 7. Inicialização e recuperação do workspace (0.3.1)
+
+O gateway **nunca cria dados sozinho**. `load()` lê o armazenamento e, conforme o que encontra, a interface mostra uma de quatro situações:
+
+| Situação | O que o app encontra | O que a pessoa vê | O que é gravado |
+|---|---|---|---|
+| **Workspace existente** | Chave `alpha7.workspace.v1` legível | O aplicativo, normalmente | Nada, exceto a marca de uso (`…v1.seen`) se ainda não existir (dados criados em versões anteriores a recebem ao abrir) |
+| **Primeira utilização** | Sem workspace **e** sem nenhum sinal de uso anterior | Tela "Como você quer começar?": **workspace vazio**, **dados de demonstração** ou **restaurar de um backup** | **Nada** antes da escolha |
+| **Workspace ausente** (`lost`) | Sem workspace, mas com sinal de uso anterior: marca de uso, cópia de segurança, cópia de dado ilegível ou registro de backup | Tela "Recuperar os dados da equipe" | **Nada**; nenhuma demonstração é criada |
+| **Dado ilegível ou incompatível** (`unreadable`) | A chave existe, mas não passa na leitura (JSON inválido, listas malformadas, `version` desconhecida) | A mesma tela de recuperação, com o motivo | Só a cópia do texto ilegível em `…v1.corrupt` (preserva, não substitui) |
+
+**Tela de recuperação**, em ordem: (1) **Importar um backup** (mesma prévia e validação da importação em Configurações); (2) **Cópia de segurança automática**, se existir, com o que ela contém e botão de restaurar; (3) **Baixar os dados brutos**: um botão para cada texto que ainda existir (dados salvos, cópia do ilegível, cópia automática), ou aviso de que não há nada; (4) **Tentar novamente**, que lê o armazenamento de novo; (5) **Começar um workspace novo**, atrás de uma confirmação explícita que oferece vazio ou demonstração e só então grava.
+
+**Garantias** (cobertas por testes de unidade e de navegador):
+
+- Nenhum caminho de falha ou ausência grava demonstração sem a pessoa escolher. Gravar quando o workspace sumiu com o app aberto (outra aba, limpeza) é **recusado** em vez de recriar dados (`IntegrityError`).
+- Prévia, cancelar, arquivo inválido e "tentar novamente" **não gravam nada**. Falha de gravação na importação ou no início de um workspace novo deixa o armazenamento como estava.
+- Começar um workspace novo sobre dado ilegível guarda antes o texto na cópia de segurança; se ela não puder ser gravada, a operação é abortada.
+- Depois de sair da tela de início ou de recuperação, o foco do teclado vai para o conteúdo principal.
+
+**Demonstração identificada.** A base de demonstração só entra por escolha explícita, vem toda marcada (`demo: true`, etiqueta "Demo") e a faixa "Dados de demonstração" aparece enquanto existir. Se a equipe cadastrar registros reais no mesmo workspace, a faixa passa a avisar que há **demonstração misturada com dados da equipe** (totais e médias somam os dois), com o caminho para limpar em Configurações. Misturar continua permitido, mas nunca em silêncio.
+
+**Inconsistência não bloqueia a abertura.** Dados legíveis, porém com vínculos quebrados (por exemplo, avaliação de atleta inexistente), abrem normalmente, para não deixar a equipe sem acesso ao que tem; uma faixa avisa quantos problemas a validação estrita achou e leva a "Verificar integridade". A contagem é feita ao carregar ou substituir o workspace, não a cada edição. Só falhas de leitura (formato, versão) levam à recuperação.
+
+### Limitações (não alegamos detectar todo desaparecimento de dados)
+
+1. **O `localStorage` não avisa quando algo some.** O app só sabe que existiu um workspace pelos rastros que ele mesmo deixa em outras chaves. Se o navegador (ou a pessoa, em "limpar dados do site") apagar **todas** as chaves do Alpha7, não resta evidência e o caso é **idêntico a uma primeira utilização**: a tela de escolha aparece, sem aviso de perda. Isso inclui trocar de navegador, de perfil ou de endereço (outra origem), que são, de fato, espaços novos.
+2. **A marca de uso é só uma pista.** Ela foi criada na 0.3.1; navegadores com dados antigos a ganham na primeira abertura depois da atualização. Quem teve os dados apagados **antes** de abrir a 0.3.1 não tem marca nem rastros e cai em "primeira utilização". Qualquer das outras chaves (cópia de segurança, cópia ilegível, registro de backup) também serve de rastro, mas não existem em todo navegador.
+3. **Alteração manual** (DevTools, extensões) pode remover só a chave principal ou só as marcas; o comportamento segue as regras da tabela acima, sem garantia além disso.
+4. **Perda com o app aberto.** Se outra aba ou uma limpeza apagar os dados enquanto esta aba está aberta, ela continua mostrando o que já carregou, as gravações novas são recusadas com mensagem e **não há exportação do que está só na memória da aba**. Recarregar a página abre a recuperação. A causa mais provável de perda real continua sendo não ter backup.
+5. **Sem armazenamento do navegador** (modo restrito), não há memória de uso anterior: abre sempre na escolha.
+6. **A cópia automática é de uma só vaga** e some junto com o resto se o site for limpo.
+7. **A recuperação é manual.** Os "dados brutos" baixados não são backups restauráveis pelo aplicativo; servem para recuperação à mão.
+
+## 8. Restaurar demonstração (protegido)
 
 Nunca substitui em silêncio. O painel descreve o impacto, mostra "Hoje o workspace tem…", recomenda e oferece "Exportar backup agora", exige a caixa "Entendi…" quando há dados da equipe, e só então libera "Confirmar: substituir tudo pela demonstração". Cancelar não altera nada.
 
-## 8. Lembrete, integridade e persistência
+## 9. Lembrete, integridade e persistência
 
 - **Lembrete**: com dados reais (não só demonstração), aparece uma faixa "Faça um backup dos dados da equipe" quando **nunca** houve backup, ou quando os dados **mudaram** desde o último e já passaram 7 dias. A mudança é detectada por uma impressão digital (SHA-256) do workspace, comparada à do último backup.
 - **Verificar integridade**: roda a validação estrita sobre o que está salvo e lista os problemas.
 - **Persistência**: o app pede `navigator.storage.persist()` e informa o resultado. Mesmo concedida, isso reduz mas **não elimina** o risco de perda.
 
-## 9. Para a futura migração ao Supabase (não iniciada)
+## 10. Para a futura migração ao Supabase (não iniciada)
 
 Preservar, como contrato:
 
@@ -149,10 +185,10 @@ Preservar, como contrato:
 - O contrato `DataGateway` (`replaceWorkspace`, `snapshotInfo`, `restoreSnapshot`, `exportRaw`, `subscribe`, `usage`) deve ser reinterpretado para o novo backend: no Supabase, cópia de segurança = backup/PITR do banco, `subscribe` = Realtime, `usage` pode ficar `null`.
 - Só a chave **anon/publicável** pode ir ao frontend.
 
-## 10. Limites e riscos que continuam
+## 11. Limites e riscos que continuam
 
 1. **Backup depende da pessoa**: sem exportar e guardar o arquivo fora do navegador, não há proteção contra perda do aparelho ou limpeza do navegador.
-2. **Armazenamento local pode ser apagado** pelo navegador (pouco espaço, modo privado, "limpar dados do site"). O app não distingue isso de primeiro uso.
+2. **Armazenamento local pode ser apagado** pelo navegador (pouco espaço, modo privado, "limpar dados do site"). Quando sobra algum rastro, o app abre a recuperação; quando **tudo** some, ele não distingue isso de primeira utilização (seção 7, limitações).
 3. **Arquivo sem criptografia** e checksum que não protege contra adulteração intencional.
 4. **Uma só cópia automática**; duas substituições seguidas descartam a anterior.
 5. **Duas abas gravando ao mesmo tempo**: a última vence.
@@ -162,10 +198,12 @@ Preservar, como contrato:
 9. **Sem controle de acesso**: quem abre o navegador do aparelho vê os dados.
 10. **Dados de demonstração** continuam marcados e contados à parte; o backup os preserva com a marca `demo`.
 
-## 11. Testes que cobrem esta etapa
+## 12. Testes que cobrem estas etapas
 
 - `src/data/backup.test.ts`: ida e volta do workspace completo; histórico de avaliações, vínculos e registros desfeitos preservados; pesos personalizados; ausência de segredos; nome do arquivo; recusa de exportar dado inconsistente; arquivos inválidos (JSON ruim, outro formato, versão futura, checksum errado, tipos/faixas/vínculos inválidos, hash correto com conteúdo forjado, duplicidades); campos desconhecidos descartados; poluição de protótipo.
-- `src/data/gateway.test.ts`: cópia automática byte a byte, desfazer e ir-e-voltar, falha de cota aborta sem alterar, falha de gravação mantém o anterior, cópia ilegível, memória sem armazenamento, evento `storage`, uso do armazenamento, camisa única, cópia ao excluir treino.
+- `src/data/gateway.test.ts`: cópia automática byte a byte, desfazer e ir-e-voltar, falha de cota aborta sem alterar, falha de gravação mantém o anterior, cópia ilegível, memória sem armazenamento, evento `storage`, uso do armazenamento, camisa única, cópia ao excluir treino; inicialização sem criar dados (primeira utilização, ausente com cada tipo de rastro, ilegível, gravação recusada quando o workspace sumiu, marca de uso, cópias brutas de recuperação).
 - `src/data/sha256.test.ts`: vetores oficiais e comparação com o `crypto` do Node.
-- `src/features/settings/backup.test.tsx`: exportar, prévia, confirmar, cancelar, arquivo inválido sem alteração, falha durante a restauração sem perda, confirmação reforçada da demonstração e de apagar tudo, desfazer, verificar integridade, uso do armazenamento, lembrete, atualização por outra aba, recuperação de dado ilegível.
+- `src/features/settings/backup.test.tsx`: exportar, prévia, confirmar, cancelar, arquivo inválido sem alteração, falha durante a restauração sem perda, confirmação reforçada da demonstração e de apagar tudo, desfazer, verificar integridade, uso do armazenamento, lembrete, atualização por outra aba.
+- `src/features/startup/startup.test.tsx`: primeiro acesso sem dados prévios (nada gravado antes da escolha; vazio; demonstração; importar backup; falha de gravação), carregamento normal de workspace existente (sem regravar; marca de uso; inconsistência não bloqueia; demonstração misturada anunciada), perda da chave principal com cada rastro, tentar novamente (ainda ausente e com os dados de volta), cópia automática (baixar, restaurar, ilegível), importação na recuperação (sucesso, arquivo adulterado, falha de gravação, cancelar), workspace novo só após confirmação (cancelar, vazio, demonstração), dados ilegíveis (texto preservado, baixar, cópia de segurança, cota cheia) e a garantia de que seis cenários de dado ausente ou inválido nunca viram demonstração em silêncio.
+- `e2e/startup.spec.ts` (Playwright, navegador real, localStorage de verdade): escolha de primeira utilização sem gravar nada, vazio e demonstração persistindo ao recarregar, chave removida abre a recuperação, importar backup, arquivo adulterado, tentar novamente, workspace novo com confirmação, dado ilegível (baixar, cancelar, confirmar), axe e ausência de rolagem horizontal a 1280 px e 360 px. Os demais testes de navegador passam pela escolha de verdade por meio de `e2e/fixtures.ts`.
 - `e2e/backup.spec.ts` (Playwright, navegador real): download de verdade, apagar e restaurar, arquivo adulterado e lixo recusados, cancelar, desfazer, demonstração mantendo pesos, lembrete, axe (acessibilidade) e ausência de rolagem horizontal em 1280 px e 360 px.
