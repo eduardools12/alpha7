@@ -11,7 +11,7 @@ Os arquivos reais em `design/references/` não seguem a numeração `01-` a `08-
 | 03 | Perfil do atleta | `atleta_alpha.jpg` | Desktop 2464×1728 | Implementada |
 | 04 | Editor de escalação | `formacao_alpha.jpg` | Desktop 2464×1728 | Implementada (sem gerar arte) |
 | 05 | Pôster da escalação | `midia_alpha.jpg` | Retrato 1856×2304 | **Não implementada** |
-| 06 | Registrar treino | `celular_alpha.jpg` | Celular 1536×2752 | **Não implementada** (rota "em desenvolvimento") |
+| 06 | Registrar treino | `celular_alpha.jpg` | Celular 1536×2752 | Implementada (v0.2), também no desktop |
 | 07 | Estatísticas | `stats_alpha.jpg` | Desktop 2752×1536 | **Não implementada** (rota "em desenvolvimento") |
 | 08 | Central de partidas | `cell_alpha.jpg` | Celular 1536×2752 | **Não implementada** (rota "em desenvolvimento") |
 
@@ -27,7 +27,10 @@ As referências são especificação, não assets. Diferenças deliberadas: `DES
   /elenco/:id           Perfil  ── /elenco/:id/editar
                                  └ /elenco/:id/avaliar (registrar avaliação)
 /escalacoes             Lista de escalações ── /escalacoes/nova, /escalacoes/:id (editor)
-/treinos  /partidas  /estatisticas   Em desenvolvimento
+/treinos                Lista de treinos ── /treinos/novo (criar)
+  /treinos/:id          Resumo pós-treino ── /treinos/:id/editar
+                                            └ /treinos/:id/registrar (registro rápido)
+/partidas  /estatisticas   Em desenvolvimento
 /configuracoes          Pesos do Overall, identidade, dados (#dados)
 ```
 
@@ -36,7 +39,7 @@ Menu lateral (≥ 960px) e barra inferior (< 960px; "Mais" abre Partidas, Estat�
 ## 01 · Dashboard (`/`)
 
 **Objetivo:** visão rápida da equipe e atalhos.
-**Componentes:** quatro indicadores (Atletas cadastrados e situação; Overall médio do elenco; Treinos realizados [Demo]; Partidas disputadas com aproveitamento [Demo]); Próxima partida [Demo]; Resumo do último treino [Demo] com presença e intensidade; Evolução da equipe (Overall médio por mês, real); Destaques individuais (maiores Overalls e maior evolução, reais); Atalhos rápidos.
+**Componentes:** quatro indicadores (Atletas cadastrados e situação; Overall médio do elenco; Treinos concluídos, **real**, com contagem de registros; Partidas disputadas com aproveitamento [Demo]); Próxima partida [Demo]; Resumo do último treino (real, a partir dos treinos cadastrados: nome, data, participantes, exercícios e registros, com atalho ao resumo); Evolução da equipe (Overall médio por mês, real); Destaques individuais (maiores Overalls e maior evolução, reais); Atalhos rápidos.
 **Ações:** Ver escalações, links para perfil, Adicionar jogador, Montar escalação, Ver elenco.
 **Estados:** vazio total (convida a cadastrar), sem avaliações (Overall médio "—"), sem atividade (traços e "Sem registros").
 **Não incluído (decisão):** seletor de período, "Novo Registro", usuário/sair.
@@ -70,9 +73,21 @@ Menu lateral (≥ 960px) e barra inferior (< 960px; "Mais" abre Partidas, Estat�
 
 Arte vertical gerada de uma escalação salva (título "Escalação oficial", confronto, local, seis titulares na quadra, líbero, reservas). Depende do gerador de artes (próxima etapa de mídia). Nada a navegar ainda. Quando existir: gerar a partir de `/escalacoes/:id`, exportar imagem, sem fotos de terceiros.
 
-## 06 · Registrar treino (celular; não implementado)
+## 06 · Registrar treino (`/treinos/:id/registrar`, celular primeiro)
 
-Objetivo: registrar fundamentos em quadra com um toque. Componentes previstos: progresso da sessão; seletor de atleta; abas de fundamentos; botões A/B/C/Erro (recepção), Ace/Válido/Erro (saque), Ponto/Erro/Bloqueado (ataque); últimos registros com desfazer; contador de tentativas. Rota atual `/treinos` informa o que está planejado.
+**Objetivo:** registrar tentativas em quadra com um toque, pelo celular, sem digitar.
+**Fluxo:** (treino já escolhido ao abrir a tela) → exercício atual → jogador → fundamento → toque no resultado. Depois de cada registro, jogador, exercício e fundamento permanecem selecionados.
+**Componentes:** listas horizontais de exercícios, jogadores (camisa em SVG, nome curto e quantos registros já tem neste treino) e fundamentos (6); painel de resultado com botões grandes coloridos pelo tom do resultado (verde, azul-violeta, laranja, vermelho, neutro) e subtítulo curto; contador de tentativas do jogador naquele fundamento e exercício, com a divisão por resultado; critérios de cada resultado (recolhível); faixa de feedback ("Registrado: Gabriel S. #8 · Recepção A") que some sozinha; últimos 6 registros com horário; "Desfazer último registro"; atalho ao resumo.
+**Ações:** escolher, registrar (um toque = uma tentativa), desfazer (anula só o último, por id), reabrir treino concluído.
+**Comportamento no celular:** depois de escolher o jogador o painel de resultado fica fixo acima da barra inferior (sempre ao alcance do polegar), baixo o bastante para não cobrir as listas; antes disso segue o fluxo normal. Botões de pelo menos 56 px de altura; bloqueio de 350 ms após cada toque contra duplo toque acidental.
+**Estados:** treino concluído (aviso e botão "Reabrir para registrar"), sem exercícios, sem participantes, treino inexistente, falha de gravação (aviso, nada é registrado, botões voltam).
+**Diferenças em relação à referência:** sem "Sessão 65% concluída" (não há meta de tentativas planejada), sem o contador "+1 / −1" nem o botão "Registrar ação" (cada resultado já registra com um toque, e o desfazer cobre o erro), sem fotos dos atletas (camisa em SVG), duas ações "Desfazer" do mockup viraram uma só, que desfaz sempre o último registro válido do treino.
+
+## 06b · Lista, criação/edição e resumo de treinos (telas novas, sem referência própria)
+
+- **Lista** (`/treinos`): cartões do mais recente ao mais antigo com status (Em andamento / Concluído), etiqueta Demo, data, duração, responsável, participantes, exercícios e registros; Registrar (só se em andamento), Resumo, Editar, Excluir com confirmação que informa a cascata; aviso de que os dados são locais.
+- **Criar/editar** (`/treinos/novo`, `/treinos/:id/editar`): nome, data, duração, responsável, descrição, observações; participantes do elenco (ativos pré-selecionados no novo treino); exercícios (nome e fundamento em foco). Na edição, exercício ou participante com registros fica bloqueado para remoção, com o motivo.
+- **Resumo** (`/treinos/:id`): identificação, números do treino, participantes, **estatísticas por fundamento** (distribuição, indicadores com fórmula e denominador, aviso de amostra insuficiente), exercícios com registros, **resultados individuais** com escolha de fundamento e comparação só quando há base, observações do responsável, concluir/reabrir, excluir. Fundamentos sem tentativas aparecem listados como "sem tentativas", sem cartão de zeros.
 
 ## 07 · Estatísticas (não implementado)
 

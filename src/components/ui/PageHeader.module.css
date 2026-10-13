@@ -47,6 +47,21 @@
   gap: var(--s-3);
 }
 
+@media (max-width: 59.99rem) {
+  .compact {
+    gap: var(--s-1);
+  }
+  .compact .title {
+    font-size: var(--fs-xl);
+  }
+  .compact .subtitle {
+    font-size: var(--fs-sm);
+  }
+  .compact .back {
+    margin-bottom: 0;
+  }
+}
+
 @media (max-width: 40rem) {
   .title {
     font-size: var(--fs-2xl);

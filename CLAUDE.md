@@ -1,17 +1,19 @@
 # Alpha7 Volleyball Performance
 
-Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.1** (primeira entrega funcional).
+Aplicação web de gestão esportiva e análise de desempenho para uma equipe amadora de voleibol. Produto real, em evolução incremental por módulos. Versão atual: **0.2** (v0.1 = elenco, avaliações e escalações; v0.2 = módulo de Treinos).
 
 ## Estado atual (não declare como pronto o que está só planejado)
 
 | Módulo | Estado |
 |---|---|
 | Shell, navegação, identidade visual | Implementado |
-| Dashboard | Implementado. Indicadores de elenco são reais (derivados das avaliações); treinos, partidas e resumo do último treino são **dados de demonstração** |
+| Dashboard | Implementado. Elenco, Overall, treinos concluídos e último treino são reais (derivados de avaliações e treinos); **apenas partidas e próxima partida** são dados de demonstração |
 | Elenco: cartas, busca, filtros, cadastro, edição, perfil | Implementado |
 | Atributos (1 a 99), avaliações com histórico, Overall por posição, pesos configuráveis | Implementado |
 | Escalação: editor com 6 titulares, líbero, reservas, ordem de saque, prévia de rodízio, salvar/listar | Implementado (regras parciais, veja `docs/PRODUCT_SPEC.md`) |
-| Treinos, Partidas, Estatísticas | **Não implementados**: telas honestas de "em desenvolvimento" |
+| Treinos: lista, criar/editar/excluir, participantes, exercícios, registro rápido por fundamento com desfazer, resumo pós-treino com estatísticas | Implementado (v0.2). Critérios de resultado e limite de amostra são **decisões iniciais a validar** (`docs/METRICS.md`, seção C) |
+| Perfil do atleta: métricas observadas (de treinos) | Implementado; as de partida seguem indisponíveis |
+| Partidas, Estatísticas consolidadas | **Não implementadas**: telas honestas de "em desenvolvimento" |
 | Gerador de artes (pôster da escalação) | **Não implementado**: botão desativado |
 | Backend (Supabase), autenticação, upload de fotos | **Não implementados**: persistência em `localStorage` |
 
@@ -37,11 +39,13 @@ Antes de dar uma tarefa por concluída: `typecheck`, `test` e `build` precisam p
 ```
 src/
   domain/       Regras de negócio PURAS (sem React, sem I/O): atributos, Overall, jogador,
-                filtro do elenco, escalação, métricas, insights, formatação. Tudo testado.
+                filtro do elenco, escalação, métricas, insights, formatação, fundamentos e
+                resultados (fundamentals), treinos e eventos (training), estatísticas de treino
+                (trainingStats). Tudo testado.
   data/         Persistência e estado: contrato DataGateway, LocalStorageGateway, dados de
                 demonstração, WorkspaceProvider (store em contexto), selectors.
   components/   ui/ (botão, campo, aviso...), brand/ (logo, carta, camisa, Overall), charts/
-  features/     dashboard, roster, lineup, settings, placeholders (uma pasta por módulo)
+  features/     dashboard, roster, lineup, trainings, settings, placeholders (uma pasta por módulo)
   app/          App/rotas, layout, menus, efeitos de rota
   styles/       tokens.css (sistema de design) e base.css
   test/         setup, fábricas e renderApp (helper de testes de tela)
@@ -73,7 +77,9 @@ Regra de dependência: `domain` não importa nada de fora de `domain`. `data` im
 5. **Ausência de dado não é zero.** Sem avaliação, Overall é `null` ("—"). Sem tentativas, métrica é indisponível, nunca 0%. Todo percentual vem com acertos e tentativas.
 6. **Escalação nunca duplica atleta.** Escolher quem já está na escalação o move (ou troca de lugar). Líbero de ofício não ocupa zona de quadra. Diferencie posição habitual, posição tática e zona/rotação.
 7. **Dados de demonstração são sempre identificados** (etiqueta "Demo" + faixa fixa) e nunca se apresentam como resultado real do Alpha7.
-8. Quando existirem treinos e partidas: uma tentativa nunca é contada duas vezes; correções preservam histórico (veja `docs/DATA_MODEL.md` e `docs/METRICS.md`).
+8. **Eventos de treino** (`TrainingEvent`): uma tentativa por evento, com `attemptKey` (idempotência: o mesmo envio nunca duplica). Só se cria evento com treino aberto, exercício DO treino e atleta participante (checado no domínio **e** no gateway). **Desfazer anula** (`voidedAt`), não apaga; toda estatística ignora anulados. Editar um treino nunca toca nos eventos; não se remove exercício com registros nem participante com registros válidos; excluir treino apaga em cascata só o que é dele.
+9. **Estatística de treino sempre com tentativas e denominador**, usando as funções de `domain/trainingStats.ts` (fórmulas em `docs/METRICS.md`). Amostra com menos de `MIN_SAMPLE` (10) tentativas é sinalizada; comparação entre atletas só com 2 ou mais de amostra adequada. A qualidade do levantamento é indicador separado do resultado do ataque. Nunca escreva "conclusões" automáticas.
+10. **Eventos de treino e de partida são coleções separadas** (a taxonomia de `domain/fundamentals.ts` é compartilhada). Registrar tentativas nunca altera avaliações (notas) nem Overall.
 
 ## Segurança
 

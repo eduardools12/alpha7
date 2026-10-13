@@ -22,21 +22,12 @@ import {
 import { formatDate, formatDayMonth, formatSigned } from '@/domain/format';
 import { overallHistory, readAttributes } from '@/domain/insights';
 import { explainOverall } from '@/domain/overall';
-import { UNAVAILABLE } from '@/domain/metrics';
 import { evaluationsFor } from '@/domain/player';
 import { POSITION_LABEL } from '@/domain/positions';
+import { PlayerObservedMetrics } from './PlayerObservedMetrics';
 import styles from './PlayerProfilePage.module.css';
 
 const GROUPS: AttributeGroup[] = ['tecnico', 'fisico-mental'];
-
-/** Estatísticas que dependem do registro de treinos e partidas (ainda não implementado). */
-const OBSERVED_METRICS = [
-  'Partidas disputadas',
-  'Pontos por jogo',
-  'Aproveitamento de ataque',
-  'Erros de saque por jogo',
-  'Presença nos treinos',
-];
 
 export function PlayerProfilePage() {
   const { playerId } = useParams();
@@ -168,22 +159,7 @@ export function PlayerProfilePage() {
           )}
         </Card>
 
-        <Card title="Métricas reais de partidas e treinos">
-          <p className={styles.muted}>
-            Estatísticas observadas dependem do registro de treinos e partidas, que ainda não existe. Ficam
-            indisponíveis em vez de aparecer como zero.
-          </p>
-          <dl className={styles.metrics}>
-            {OBSERVED_METRICS.map((label) => (
-              <div key={label} className={styles.metric}>
-                <dt>{label}</dt>
-                <dd>
-                  <span aria-label="indisponível">{UNAVAILABLE}</span>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
+        <PlayerObservedMetrics player={player} trainings={data.trainings} trainingEvents={data.trainingEvents} />
 
         {reading && (
           <Card title="Análise técnica">
@@ -219,7 +195,7 @@ export function PlayerProfilePage() {
               Média ponderada das notas com os pesos de {POSITION_LABEL[player.primaryPosition].toLowerCase()}. Os pesos
               são uma escolha de modelagem do Alpha7 e podem ser ajustados em Configurações.
             </p>
-            <div className={styles.tableWrap}>
+            <div className={styles.tableWrap} role="region" aria-label="Tabela de cálculo do Overall" tabIndex={0}>
               <table className={styles.table}>
                 <thead>
                   <tr>

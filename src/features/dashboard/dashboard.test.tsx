@@ -12,8 +12,12 @@ describe('Dashboard', () => {
     expect(within(tile('Atletas cadastrados')).getByText('18')).toBeInTheDocument();
     expect(within(tile('Atletas cadastrados')).getByText(/14 ativos · 2 lesionados · 2 em transição/)).toBeInTheDocument();
     expect(within(tile('Overall médio do elenco')).getByText(/17 de 18 atletas avaliados/)).toBeInTheDocument();
-    // Treinos e partidas só existem como demonstração e são marcados assim
-    expect(within(tile('Treinos realizados')).getByText('Demo')).toBeInTheDocument();
+    // Treinos agora vêm dos registros (aqui, treinos de demonstração, marcados como tal)
+    const trainingsTile = tile('Treinos concluídos');
+    expect(within(trainingsTile).getByText('3')).toBeInTheDocument();
+    expect(within(trainingsTile).getByText(/registros válidos · 1 em andamento/)).toBeInTheDocument();
+    expect(within(trainingsTile).getByText('Demo')).toBeInTheDocument();
+    // Partidas só existem como demonstração e são marcadas assim
     expect(within(tile('Partidas disputadas')).getByText('Demo')).toBeInTheDocument();
     expect(within(tile('Partidas disputadas')).getByText(/78,6%: 11 de 14 vitórias/)).toBeInTheDocument();
   });
@@ -56,11 +60,15 @@ describe('Dashboard', () => {
     expect(within(overall).getByText('—')).toBeInTheDocument();
     expect(within(overall).getByText('Nenhum atleta avaliado ainda')).toBeInTheDocument();
     expect(within(overall).queryByText('0')).not.toBeInTheDocument();
-    // sem registros de treino/partida: traço e "Sem registros"
-    expect(within(tile('Treinos realizados')).getByText('—')).toBeInTheDocument();
+    // sem treinos cadastrados: contagem real 0 com explicação; partidas indisponíveis (traço)
+    const trainingsTile = tile('Treinos concluídos');
+    expect(within(trainingsTile).getByText('0')).toBeInTheDocument();
+    expect(within(trainingsTile).getByText('Nenhum treino cadastrado ainda')).toBeInTheDocument();
+    expect(within(trainingsTile).queryByText('Demo')).not.toBeInTheDocument();
+    expect(within(tile('Partidas disputadas')).getByText('—')).toBeInTheDocument();
     expect(within(tile('Partidas disputadas')).getByText('Sem partidas registradas')).toBeInTheDocument();
     expect(screen.getByText('Os destaques aparecem depois da primeira avaliação técnica.')).toBeInTheDocument();
-    expect(screen.getByText('Nenhum treino registrado ainda.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Criar treino' })).toHaveAttribute('href', '/treinos/novo');
   });
 
   it('o banner de demonstração só aparece quando há registros de demonstração', async () => {

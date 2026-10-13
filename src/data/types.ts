@@ -1,29 +1,21 @@
 import type { Lineup } from '@/domain/lineup';
 import type { OverallWeights } from '@/domain/overall';
 import type { Evaluation, Player } from '@/domain/player';
+import type { Training, TrainingEvent, TrainingExercise } from '@/domain/training';
 
 export interface Settings {
   weights: OverallWeights;
 }
 
-export type TrainingIntensity = 'baixa' | 'media' | 'alta';
-
 /**
- * Resumo de atividade (treinos e partidas) usado pelo dashboard.
- * Na primeira entrega só existe como dado de DEMONSTRAÇÃO: o registro real de
- * treinos e partidas ainda não foi implementado (veja docs/DATA_MODEL.md).
+ * Resumo de atividade COMPETITIVA usado pelo dashboard. Só existe como dado de
+ * DEMONSTRAÇÃO: o módulo de partidas ainda não foi implementado (veja docs/DATA_MODEL.md).
+ * Treinos NÃO fazem parte daqui: vêm dos registros reais em Workspace.trainings.
  */
 export interface ActivitySnapshot {
   demo: true;
-  trainingsCount: number;
   matches: { played: number; wins: number };
   nextMatch: { opponent: string; competition: string; scheduledAt: string; venue: string } | null;
-  lastTraining: {
-    date: string;
-    focus: string;
-    attendance: { present: number; total: number };
-    intensity: TrainingIntensity;
-  } | null;
 }
 
 export interface Workspace {
@@ -32,4 +24,8 @@ export interface Workspace {
   lineups: Lineup[];
   settings: Settings;
   activity: ActivitySnapshot | null;
+  /** Treinos, exercícios e eventos de treino ficam em coleções separadas, ligadas por id. */
+  trainings: Training[];
+  exercises: TrainingExercise[];
+  trainingEvents: TrainingEvent[];
 }

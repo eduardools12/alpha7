@@ -70,6 +70,18 @@ Nomes em caixa alta existem só na carta (convenção de carta esportiva, presen
 
 **Gráfico de tendência** (`TrendChart`): área em lilás, pontos, grade horizontal discreta, dica ao passar. Acompanha **tabela oculta** com os mesmos números (leitores de tela). Carregado sob demanda.
 
+**Botões de resultado** (registro de treino): grandes (≥ 56 px), coloridos pelo **tom** do resultado: `--outcome-good` verde, `--outcome-ok` azul-violeta, `--outcome-warn` laranja (texto escuro), `--outcome-bad` vermelho, `--outcome-neutral` grafite com contorno. Texto branco sobre verde, azul-violeta e vermelho (≥ 4,5:1). O rótulo usa Barlow Condensed e o subtítulo curto fica abaixo; o nome acessível é "rótulo, subtítulo". Ao tocar, o botão recebe um pulso de confirmação (respeita `prefers-reduced-motion`) e fica bloqueado por 350 ms.
+
+**Seletores horizontais** (exercício, jogador, fundamento): botões em linha com rolagem por gesto no celular (sem barra de rolagem visível) e quebra em linhas a partir de 768 px. Estado ativo = `aria-pressed` com preenchimento lilás (ou contorno e halo no caso do jogador).
+
+**Painel de resultado fixo** (celular): depois de escolher o jogador, o painel com os botões fica fixo acima da barra inferior, baixo o bastante para não cobrir as listas. Antes de escolher, segue o fluxo normal. No desktop nunca é fixo.
+
+**Faixa de feedback** (`toast`): sobreposta (não ocupa espaço, então nada "pula" sob o dedo), anunciada por `role="status"`, some sozinha em 3,5 s; borda verde (registrado), laranja (desfeito) ou vermelha (erro).
+
+**Barras de distribuição** (`DistributionBars`): rótulo, barra no tom do resultado e, sempre em texto, contagem e percentual. Sem tentativas, barras vazias e percentual "—". A barra é apoio visual e é ocultada de leitores de tela.
+
+**Região de tabela rolável:** tabelas largas ficam num contêiner focável (`tabIndex=0`, `role="region"`, com nome) para que quem usa teclado consiga rolar.
+
 **Tabelas:** cabeçalhos `th scope`, números alinhados à direita e tabulares, rolagem horizontal contida em telas pequenas. Sem zebra; linhas separadas por filete.
 
 ## 5. Gráficos
@@ -114,4 +126,6 @@ Logo A7 oficial: `design/assets/a7 logo.jpeg` (roxo sobre branco). Cópias idên
 | 04: "Gerar arte" | Botão desativado "em breve" | Gerador ainda não existe |
 | 04: quadra azul em perspectiva, ordem 1º a 6º fora da quadra | Quadra lilás estilizada; ordem de saque em lista e zona P1 a P6 na própria zona | Alvos de toque e clareza da ordem |
 | 04: "Posições 1/4/5/6" e jogador repetido (Lucas #4 duas vezes) | Zonas P1 a P6, cada atleta uma vez | Erros do mockup |
-| 07: "Qualidade de Recepção (Perfect, Medium, Difficult, Erro)" em inglês e eixo "16/wek" | Planejado em português | Será feito com o módulo de estatísticas |
+| 07: "Qualidade de Recepção (Perfect, Medium, Difficult, Erro)" em inglês e eixo "16/wek" | Distribuição da recepção em português (A, B, C, Erro) dentro do resumo de cada treino; a tela 07 consolidada segue planejada | Textos do mockup com erros; a consolidação entre treinos depende de recortes de período |
+| 06: botões A/B/C/Erro com "Registrar ação" e contador "+1 / −1"; "Sessão 65% concluída"; duas ações "Desfazer" | Um toque no resultado já registra; um único "Desfazer último registro"; sem barra de progresso | Não há meta de tentativas para medir progresso; o desfazer cobre o erro de toque |
+| 06: cores dos botões (verde, azul claro, laranja, vermelho) | Mesmos tons, escurecidos o bastante para texto com contraste ≥ 4,5:1 (laranja usa texto escuro) | Acessibilidade |

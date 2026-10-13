@@ -41,6 +41,13 @@
   display: none;
 }
 
+/* Em telas pequenas o aviso de demonstração fica só com título e link (os registros seguem etiquetados "Demo"). */
+@media (max-width: 39.99rem) {
+  .long {
+    display: none;
+  }
+}
+
 .banners a {
   color: var(--a7-lilac-100);
   font-weight: 600;

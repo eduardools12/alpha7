@@ -93,7 +93,6 @@ describe('navegação no celular', () => {
 
 describe('módulos ainda não desenvolvidos', () => {
   it.each([
-    ['/treinos', 'Treinos'],
     ['/partidas', 'Partidas'],
     ['/estatisticas', 'Estatísticas'],
   ])('%s declara que está em desenvolvimento e não oferece controles falsos', async (path, title) => {

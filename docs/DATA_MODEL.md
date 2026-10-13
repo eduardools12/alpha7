@@ -4,7 +4,7 @@ Duas partes: **(A)** o que existe hoje em código (TypeScript + localStorage) e 
 
 ## A. Estado atual (implementado)
 
-Tipos em `src/domain/` e `src/data/types.ts`. Persistência por `DataGateway` (`src/data/gateway.ts`), implementada por `LocalStorageGateway` na chave `alpha7.workspace.v1` com `{ version: 1, players, evaluations, lineups, settings, activity }`. Ao abrir, os dados são validados; formato inválido gera `StorageCorruptedError` e uma cópia fica em `alpha7.workspace.v1.corrupt`.
+Tipos em `src/domain/` e `src/data/types.ts`. Persistência por `DataGateway` (`src/data/gateway.ts`), implementada por `LocalStorageGateway` na chave `alpha7.workspace.v1` com `{ version: 1, players, evaluations, lineups, settings, activity, trainings, exercises, trainingEvents }`. Ao abrir, os dados são validados; formato inválido gera `StorageCorruptedError` e uma cópia fica em `alpha7.workspace.v1.corrupt`. Os campos `trainings`, `exercises` e `trainingEvents` são **aditivos**: dados salvos antes do módulo de treinos (sem essas listas) continuam válidos e abrem com elas vazias; se existirem e estiverem malformadas, o dado é tratado como corrompido.
 
 | Entidade | Campos principais | Observações |
 |---|---|---|
@@ -12,13 +12,27 @@ Tipos em `src/domain/` e `src/data/types.ts`. Persistência por `DataGateway` (`
 | `Evaluation` | id, playerId, evaluatedAt (AAAA-MM-DD), evaluator, note, attributes (9 notas de 1 a 99), createdAt, demo | **Somente acrescentada.** O Overall não é gravado: é calculado |
 | `Lineup` | id, title, opponent, competition, scheduledAt, venue, formation (5-1/4-2/6-2), starters[6] (`{playerId, role}` ou null; índice 0 = P1), liberoId, benchIds[], createdAt, updatedAt, demo | Nenhum atleta aparece duas vezes (garantido pelo domínio e revalidado ao salvar) |
 | `Settings` | weights: pesos do Overall por posição × atributo | Provisórios e editáveis |
-| `ActivitySnapshot` | trainingsCount, matches{played,wins}, nextMatch, lastTraining | **Somente demonstração** (`demo: true`) enquanto treinos e partidas não existirem |
+| `Training` | id, name, date (AAAA-MM-DD), durationMinutes?, description, notes (observações do responsável), responsible (texto livre), participantIds[], status (`aberto`/`concluido`), completedAt?, createdAt, updatedAt, demo | Identificação própria. Participantes vêm do elenco |
+| `TrainingExercise` | id, trainingId, name, focus? (fundamento em foco, informativo), order, createdAt | Pertence a exatamente um treino |
+| `TrainingEvent` | id, trainingId, exerciseId, playerId, fundamental, outcome, recordedAt (data e hora ISO), attemptKey, voidedAt?, demo | **Uma tentativa por evento.** `fundamental` + `outcome` formam um par validado (`FundamentalResult`). Nunca apagado individualmente: "desfazer" preenche `voidedAt` |
+| `ActivitySnapshot` | matches{played,wins}, nextMatch | **Somente demonstração** (`demo: true`) enquanto partidas não existirem. Treinos **não** fazem mais parte dele: vêm dos registros reais |
 
-Relações: `Evaluation.playerId → Player.id` (1 atleta : N avaliações); `Lineup.starters/liberoId/benchIds → Player.id`.
+Relações: `Evaluation.playerId → Player.id` (1 atleta : N avaliações); `Lineup.starters/liberoId/benchIds → Player.id`; `TrainingExercise.trainingId → Training.id`; `TrainingEvent.trainingId → Training.id`, `.exerciseId → TrainingExercise.id` (do **mesmo** treino) e `.playerId → Player.id` (que está em `Training.participantIds`).
+
+**Eventos de treino e de partida são mundos separados.** `TrainingEvent` é uma coleção própria; a taxonomia de fundamentos e resultados (`src/domain/fundamentals.ts`) é compartilhada, de modo que os futuros `MatchEvent` reutilizem as mesmas definições sem se misturar com treinos. **Avaliações (notas) e eventos (estatísticas) também são separados**: registrar tentativas nunca altera `Evaluation`.
 
 Regras de integridade em código: camisa única entre atletas; atributos inteiros de 1 a 99; posição secundária ≠ principal; avaliação não pode ter data futura; escalação só salva com 6 titulares, sem repetição e com nome; escalação apontando para atleta inexistente é recusada.
 
-Limitações: um só navegador, sem backup, sem multiusuário, sem fotos.
+Integridade de treinos (aplicada no domínio **e** de novo no gateway, para que nenhuma tela consiga burlá-la):
+
+- Um evento só é criado se o treino existe e está aberto, o exercício pertence a esse treino, o atleta existe e participa do treino, e o resultado é válido para o fundamento. Caso contrário: erro com mensagem clara e nada é gravado.
+- **Idempotência por `attemptKey`:** repetir o mesmo envio devolve o evento original (não duplica, não regrava). A chave de um evento desfeito continua ocupada: o mesmo toque não "ressuscita".
+- **Desfazer** anula um evento específico por id (`voidedAt`), é idempotente e preserva o histórico. Estatísticas usam só `voidedAt === null`.
+- **Editar o treino** (nome, descrição, observações, data, duração, responsável, participantes, exercícios) nunca toca nos eventos. Não é possível remover um exercício que tem registros (válidos ou desfeitos) nem um participante com registros válidos; renomear é sempre permitido.
+- **Excluir o treino** apaga, de forma atômica, o treino, seus exercícios e todos os seus eventos (válidos e desfeitos), e só eles. A tela informa as contagens antes de confirmar.
+- Treino concluído não aceita novos registros até ser reaberto.
+
+Limitações: um só navegador, sem backup, sem multiusuário, sem fotos. **Os dados locais não estão sincronizados com a nuvem** e o limite do `localStorage` (cerca de 5 MB) restringe o volume de registros; cada gravação regrava o conjunto inteiro (adequado ao volume de uma equipe amadora, não ao backend definitivo).
 
 ## B. Proposta para Supabase/PostgreSQL (planejado)
 
@@ -101,29 +115,52 @@ create table lineup_starters (
 create table lineup_bench (lineup_id uuid references lineups on delete cascade, player_id uuid references players, primary key (lineup_id, player_id));
 
 -- Treinos
+-- Espelha o modelo implementado em src/domain/training.ts (nomes de coluna em snake_case).
 create table trainings (
   id uuid primary key default gen_random_uuid(), team_id uuid not null references teams on delete cascade,
-  held_on date not null, focus text not null default '', intensity text check (intensity in ('baixa','media','alta')), notes text not null default ''
+  name text not null check (char_length(name) between 2 and 80),
+  held_on date not null,
+  duration_minutes smallint check (duration_minutes between 1 and 600),
+  description text not null default '' check (char_length(description) <= 500),
+  notes text not null default '' check (char_length(notes) <= 1000),
+  responsible text not null default '' check (char_length(responsible) <= 60),   -- depois: references auth.users
+  status text not null default 'aberto' check (status in ('aberto','concluido')),
+  completed_at timestamptz,
+  created_at timestamptz default now(), updated_at timestamptz default now()
+);
+create table training_participants (
+  training_id uuid references trainings on delete cascade, player_id uuid references players,
+  primary key (training_id, player_id)
 );
 create table training_exercises (
   id uuid primary key default gen_random_uuid(), training_id uuid not null references trainings on delete cascade,
-  position smallint not null, name text not null, fundamental text check (fundamental in ('saque','recepcao','levantamento','ataque','bloqueio','defesa'))
+  position smallint not null, name text not null check (char_length(name) between 2 and 60),
+  focus text check (focus in ('saque','recepcao','levantamento','ataque','bloqueio','defesa')),
+  unique (id, training_id),                               -- permite a chave composta abaixo
+  unique (training_id, name)
 );
-create table training_attendance (
-  training_id uuid references trainings on delete cascade, player_id uuid references players,
-  present boolean not null, primary key (training_id, player_id)
-);
--- Cada linha = UMA tentativa. attempt_key (gerada no cliente) impede contar duas vezes o mesmo toque.
+-- Cada linha = UMA tentativa (treino). Partidas terão outra tabela (rally_events): não se misturam.
 create table training_actions (
   id uuid primary key default gen_random_uuid(),
-  training_id uuid not null references trainings on delete cascade,
-  exercise_id uuid references training_exercises,
-  player_id uuid not null references players,
+  training_id uuid not null,
+  exercise_id uuid not null,
+  player_id uuid not null,
   fundamental text not null check (fundamental in ('saque','recepcao','levantamento','ataque','bloqueio','defesa')),
-  outcome text not null,                                  -- ex.: recepção: A/B/C/erro; saque: ace/valido/erro; ataque: ponto/erro/bloqueado/continuou
-  attempt_key uuid not null unique,
-  recorded_at timestamptz default now(),
-  voided_at timestamptz, voided_by uuid references auth.users, void_reason text   -- "desfazer" e correções
+  outcome text not null,
+  -- resultado coerente com o fundamento (mutuamente exclusivos por fundamento)
+  check (
+    (fundamental = 'saque'        and outcome in ('ace','valido','erro')) or
+    (fundamental = 'recepcao'     and outcome in ('A','B','C','erro')) or
+    (fundamental = 'levantamento' and outcome in ('excelente','atacavel','quebrado','erro')) or
+    (fundamental = 'ataque'       and outcome in ('ponto','erro','bloqueado','outra')) or
+    (fundamental = 'bloqueio'     and outcome in ('ponto','sem_ponto','erro')) or
+    (fundamental = 'defesa'       and outcome in ('positiva','recuperada','erro'))
+  ),
+  attempt_key text not null unique,                       -- idempotência: o mesmo toque nunca vira dois registros
+  recorded_at timestamptz not null default now(),
+  voided_at timestamptz, voided_by uuid references auth.users, void_reason text,   -- "desfazer": anula, não apaga
+  foreign key (exercise_id, training_id) references training_exercises (id, training_id),   -- exercício DO MESMO treino
+  foreign key (training_id, player_id) references training_participants (training_id, player_id)   -- atleta participante
 );
 
 -- Partidas
@@ -163,6 +200,7 @@ create table rally_events (
 ### Regras e RLS
 
 - Política padrão: `using (team_id in (select team_id from team_members where user_id = auth.uid()))`. Tabelas filhas herdam via `exists` na tabela-pai.
+- Excluir um treino em cascata (`on delete cascade` em `training_exercises` e `training_participants`) exige tratar `training_actions` no mesmo comando (a chave composta impede apagar exercício com registros; a exclusão do treino deve apagar os registros antes, numa função/transação).
 - `evaluations`, `training_actions`, `rallies`, `rally_events`: permitir `insert` e `select`; **sem** `update`/`delete` (anulação por `voided_*`, correção por nova linha com `corrects_id`). Só `coach` anula.
 - Estatísticas lêem somente linhas com `voided_at is null` (visões `valid_training_actions`, `valid_rallies`).
 - Placar do set = contagem de rallies válidos por `winner_side`; validar fim de set contra `target_points` com diferença de 2 (configurável).

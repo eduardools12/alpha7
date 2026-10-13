@@ -1,11 +1,21 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import type { Fundamental } from '@/domain/fundamentals';
 import { newId } from '@/domain/id';
+import {
+  applyTrainingDraft,
+  buildTrainingEvent,
+  checkTrainingEdit,
+  type Training,
+  type TrainingDraft,
+  type TrainingEvent,
+  type TrainingStatus,
+} from '@/domain/training';
 import type { Lineup } from '@/domain/lineup';
 import type { OverallWeights } from '@/domain/overall';
 import type { Evaluation, Player, PlayerDraft } from '@/domain/player';
 import type { Attributes } from '@/domain/attributes';
 import { createDemoWorkspace, createEmptyWorkspace } from './demo';
-import { StorageCorruptedError, type DataGateway } from './gateway';
+import { IntegrityError, StorageCorruptedError, type DataGateway } from './gateway';
 import { LocalStorageGateway } from './localStorageGateway';
 import type { Workspace } from './types';
 
@@ -28,6 +38,25 @@ export interface WorkspaceActions {
   restoreDemo(): Promise<void>;
   clearAllData(): Promise<void>;
   reload(): Promise<void>;
+
+  /** Cria (trainingId null) ou edita um treino e seus exercícios. Nunca apaga registros. */
+  saveTraining(trainingId: string | null, draft: TrainingDraft): Promise<Training>;
+  /** Exclui o treino e, em cascata, seus exercícios e registros. */
+  deleteTraining(trainingId: string): Promise<void>;
+  setTrainingStatus(trainingId: string, status: TrainingStatus): Promise<Training>;
+  /** Registra uma tentativa. Idempotente por attemptKey (devolve o evento já existente). */
+  recordTrainingEvent(input: RecordTrainingInput): Promise<TrainingEvent>;
+  /** Desfaz (anula) um registro específico. Repetir a chamada é inofensivo. */
+  undoTrainingEvent(eventId: string): Promise<void>;
+}
+
+export interface RecordTrainingInput {
+  trainingId: string;
+  exerciseId: string;
+  playerId: string;
+  fundamental: Fundamental;
+  outcome: string;
+  attemptKey: string;
 }
 
 export interface WorkspaceValue {
@@ -54,6 +83,8 @@ async function guarded<T>(work: () => Promise<T>): Promise<T> {
     return await work();
   } catch (error) {
     if (error instanceof DomainRuleError) throw error;
+    // Violação de integridade: a mensagem já é compreensível (ex.: "o treino não existe").
+    if (error instanceof IntegrityError) throw new DomainRuleError(error.message);
     throw new Error(SAVE_FAILED, { cause: error });
   }
 }
@@ -64,6 +95,9 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
   const [error, setError] = useState<string | null>(null);
   const [corrupted, setCorrupted] = useState(false);
   const [data, setData] = useState<Workspace>(() => createEmptyWorkspace());
+  // Estado mais recente para validar registros em toques rápidos, antes de o React re-renderizar.
+  const latest = useRef(data);
+  latest.current = data;
 
   const load = useCallback(async () => {
     setStatus('loading');
@@ -180,6 +214,102 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
           const settings = { ...data.settings, weights };
           await gw.saveSettings(settings);
           setData((prev) => ({ ...prev, settings }));
+        });
+      },
+
+      async saveTraining(trainingId, draft) {
+        return guarded(async () => {
+          const current = latest.current;
+          const existing = trainingId ? (current.trainings.find((t) => t.id === trainingId) ?? null) : null;
+          if (trainingId && !existing) throw new DomainRuleError('Este treino não existe mais.');
+          if (existing) {
+            const blocked = checkTrainingEdit(existing, draft, current.exercises, current.trainingEvents, current.players);
+            if (blocked) throw new DomainRuleError(blocked);
+          }
+          const unknown = draft.participantIds.find((id) => !current.players.some((p) => p.id === id));
+          if (unknown) throw new DomainRuleError('Há participante que não está mais no elenco.');
+
+          const { training, exercises } = applyTrainingDraft(existing, draft, new Date().toISOString(), newId);
+          await gw.saveTraining(training, exercises);
+          setData((prev) => ({
+            ...prev,
+            trainings: prev.trainings.some((t) => t.id === training.id)
+              ? prev.trainings.map((t) => (t.id === training.id ? training : t))
+              : [...prev.trainings, training],
+            exercises: [...prev.exercises.filter((e) => e.trainingId !== training.id), ...exercises],
+          }));
+          return training;
+        });
+      },
+
+      async deleteTraining(trainingId) {
+        await guarded(async () => {
+          await gw.deleteTraining(trainingId);
+          setData((prev) => ({
+            ...prev,
+            trainings: prev.trainings.filter((t) => t.id !== trainingId),
+            exercises: prev.exercises.filter((e) => e.trainingId !== trainingId),
+            trainingEvents: prev.trainingEvents.filter((e) => e.trainingId !== trainingId),
+          }));
+        });
+      },
+
+      async setTrainingStatus(trainingId, status) {
+        return guarded(async () => {
+          const current = latest.current;
+          const existing = current.trainings.find((t) => t.id === trainingId);
+          if (!existing) throw new DomainRuleError('Este treino não existe mais.');
+          const now = new Date().toISOString();
+          const training: Training = {
+            ...existing,
+            status,
+            completedAt: status === 'concluido' ? now : null,
+            updatedAt: now,
+          };
+          await gw.saveTraining(
+            training,
+            current.exercises.filter((e) => e.trainingId === trainingId),
+          );
+          setData((prev) => ({ ...prev, trainings: prev.trainings.map((t) => (t.id === trainingId ? training : t)) }));
+          return training;
+        });
+      },
+
+      async recordTrainingEvent(input) {
+        return guarded(async () => {
+          const current = latest.current;
+          const outcome = buildTrainingEvent(
+            { ...input, id: newId('event'), recordedAt: new Date().toISOString() },
+            {
+              trainings: current.trainings,
+              exercises: current.exercises,
+              events: current.trainingEvents,
+              players: current.players,
+            },
+          );
+          if (!outcome.ok) throw new DomainRuleError(outcome.reason);
+          if (outcome.duplicate) return outcome.event; // mesmo toque repetido: não grava de novo
+          await gw.addTrainingEvent(outcome.event);
+          setData((prev) =>
+            prev.trainingEvents.some((e) => e.attemptKey === outcome.event.attemptKey)
+              ? prev
+              : { ...prev, trainingEvents: [...prev.trainingEvents, outcome.event] },
+          );
+          return outcome.event;
+        });
+      },
+
+      async undoTrainingEvent(eventId) {
+        await guarded(async () => {
+          const target = latest.current.trainingEvents.find((e) => e.id === eventId);
+          if (!target) throw new DomainRuleError('Este registro não existe mais.');
+          if (target.voidedAt !== null) return; // já desfeito: repetir não faz nada
+          const voidedAt = new Date().toISOString();
+          await gw.voidTrainingEvent(eventId, voidedAt);
+          setData((prev) => ({
+            ...prev,
+            trainingEvents: prev.trainingEvents.map((e) => (e.id === eventId && e.voidedAt === null ? { ...e, voidedAt } : e)),
+          }));
         });
       },
 

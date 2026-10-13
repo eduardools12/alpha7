@@ -9,6 +9,10 @@ const ROUTES = [
   '/escalacoes',
   '/escalacoes/demo-l-01',
   '/treinos',
+  '/treinos/novo',
+  '/treinos/demo-t-01',
+  '/treinos/demo-t-01/editar',
+  '/treinos/demo-t-04/registrar',
   '/configuracoes',
 ];
 
@@ -101,6 +105,43 @@ test.describe('celular: usabilidade', () => {
       expect(box?.width ?? 0).toBeGreaterThanOrEqual(80);
       expect(box?.height ?? 0).toBeGreaterThanOrEqual(80);
       expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(390);
+    }
+  });
+
+  test('registro rápido: botões de resultado grandes e sempre acima da barra inferior depois de escolher o jogador', async ({ page }) => {
+    await open(page, '/treinos/demo-t-04/registrar');
+    await page.getByRole('button', { name: /Gabriel S\., camisa 8/ }).click();
+    await page.getByRole('group', { name: 'Fundamento' }).getByRole('button', { name: 'Recepção' }).click();
+
+    const outcomes = page.getByRole('button', { name: /^(A|B|C|Erro), / });
+    await expect(outcomes).toHaveCount(4);
+    const nav = await page.getByRole('navigation', { name: 'Principal, celular' }).boundingBox();
+    for (let i = 0; i < 4; i++) {
+      const box = await outcomes.nth(i).boundingBox();
+      expect(box?.height ?? 0, 'altura do botão').toBeGreaterThanOrEqual(56);
+      expect(box?.width ?? 0, 'largura do botão').toBeGreaterThanOrEqual(120);
+      expect((box?.y ?? 0) + (box?.height ?? 0), 'botão acima da barra inferior').toBeLessThanOrEqual((nav?.y ?? 0) + 1);
+    }
+    // continua assim depois de rolar até o fim da página
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const last = await outcomes.nth(3).boundingBox();
+    expect((last?.y ?? 0) + (last?.height ?? 0)).toBeLessThanOrEqual((nav?.y ?? 0) + 1);
+  });
+
+  test('registro rápido: alvos de toque de jogadores e fundamentos têm pelo menos 44px', async ({ page }) => {
+    await open(page, '/treinos/demo-t-04/registrar');
+    for (const locator of [
+      page.getByRole('group', { name: 'Jogador' }).getByRole('button'),
+      page.getByRole('group', { name: 'Fundamento' }).getByRole('button'),
+      page.getByRole('group', { name: 'Exercício atual' }).getByRole('button'),
+    ]) {
+      const count = await locator.count();
+      expect(count).toBeGreaterThan(0);
+      for (let i = 0; i < count; i++) {
+        const box = await locator.nth(i).boundingBox();
+        expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+        expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
+      }
     }
   });
 

@@ -23,13 +23,34 @@ describe('Perfil do atleta', () => {
     expect(screen.getByText(/85\.1\s*→/)).toBeInTheDocument();
   });
 
-  it('estatísticas observadas ficam indisponíveis, não zero, quando não há registros', async () => {
+  const observed = () => screen.getByRole('heading', { name: 'Métricas observadas' }).closest('section') as HTMLElement;
+
+  it('métricas observadas vêm dos registros de treino, com denominador, e as de partida ficam indisponíveis', async () => {
     renderApp({ path: '/elenco/demo-p-08' });
     await screen.findByRole('heading', { level: 2, name: 'Gabriel Silva' });
-    const card = screen.getByRole('heading', { name: 'Métricas reais de partidas e treinos' }).closest('section') as HTMLElement;
-    expect(within(card).getAllByLabelText('indisponível')).toHaveLength(5);
-    expect(within(card).queryByText('0')).not.toBeInTheDocument();
-    expect(within(card).queryByText('0%')).not.toBeInTheDocument();
+    const card = within(observed());
+    // Gabriel (demonstração) tem tentativas de saque nos treinos: o indicador traz "x de y"
+    const serve = card.getByText('Taxa de ace').closest('div') as HTMLElement;
+    expect(within(serve).getByText(/^\d+ de \d+$/)).toBeInTheDocument();
+    expect(card.getByText(/tentativas em \d+ treinos/)).toBeInTheDocument();
+    // partidas ainda não existem: indisponíveis (3), nunca zero
+    expect(card.getAllByLabelText('indisponível')).toHaveLength(3);
+    // Um 0,0% só é aceitável se medido: o denominador ("de n") é sempre maior que zero
+    for (const zero of card.queryAllByText('0,0%')) {
+      expect(zero.closest('dd')).toHaveTextContent(/ de [1-9]\d*/);
+    }
+  });
+
+  it('atleta sem registros de treino: todos os indicadores indisponíveis e nenhum zero', async () => {
+    renderApp({ path: '/elenco/demo-p-18' });
+    await screen.findByRole('img', { name: 'Overall indisponível: sem avaliação' });
+    const card = within(observed());
+    expect(card.getByText(/Nenhum registro de treino deste atleta ainda/)).toBeInTheDocument();
+    expect(card.getAllByText('sem tentativas registradas')).toHaveLength(6);
+    expect(card.getAllByText('—').length).toBeGreaterThanOrEqual(6);
+    expect(card.queryByText('0%')).not.toBeInTheDocument();
+    expect(card.queryByText('0,0%')).not.toBeInTheDocument();
+    expect(card.getByText('Treinos com participação')).toBeInTheDocument();
   });
 
   it('atleta sem avaliação: Overall indisponível, sem gráfico e com convite para avaliar', async () => {

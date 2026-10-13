@@ -41,27 +41,6 @@ export function ComingSoonPage({ title, subtitle, icon, planned, meanwhile }: Co
   );
 }
 
-export function TrainingsPage() {
-  return (
-    <ComingSoonPage
-      title="Treinos"
-      subtitle="Registro de fundamentos por sessão"
-      icon="list"
-      planned={[
-        'Criar um treino com data, foco e vários exercícios.',
-        'Registrar recepção A/B/C, erro direto, saque, ataque, bloqueio e defesa por atleta, com desfazer.',
-        'Presença e intensidade da sessão.',
-        'Estatísticas calculadas somente a partir de registros válidos, sem contar tentativas em dobro.',
-      ]}
-      meanwhile={{
-        text: 'Os critérios de recepção A/B/C e erro direto já estão documentados para validação.',
-        to: PATHS.roster,
-        label: 'Ver o elenco',
-      }}
-    />
-  );
-}
-
 export function MatchesPage() {
   return (
     <ComingSoonPage
@@ -90,15 +69,15 @@ export function StatsPage() {
       subtitle="Análise de desempenho da equipe e dos atletas"
       icon="chart"
       planned={[
-        'Taxa de ace, eficiência de ataque, sucesso no side-out e eficiência de bloqueio, sempre com acertos e tentativas.',
-        'Qualidade da recepção (A, B, C e erro) por treino.',
-        'Comparação entre atacantes e evolução dos treinos.',
+        'Visão consolidada da equipe e dos atletas ao longo de vários treinos, com filtros de período.',
+        'Evolução dos indicadores de treino entre sessões.',
+        'Sucesso no side-out e demais indicadores que dependem de partidas.',
         'Quando não houver tentativas, a métrica aparecerá como indisponível, nunca como 0%.',
       ]}
       meanwhile={{
-        text: 'As notas técnicas e o Overall (avaliações do treinador) já aparecem no perfil de cada atleta.',
-        to: PATHS.roster,
-        label: 'Abrir o elenco',
+        text: 'Cada treino já tem um resumo com estatísticas por fundamento, recepção, eficiência de ataque e resultados individuais.',
+        to: PATHS.trainings,
+        label: 'Abrir os treinos',
       }}
     />
   );

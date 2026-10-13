@@ -17,8 +17,11 @@ function DemoBanner() {
     <div className={styles.banners}>
       {hasDemo && (
         <Notice tone="info" title="Dados de demonstração">
-          Atletas, notas, treinos e partidas marcados como “Demo” são fictícios e não representam resultados reais do
-          Alpha7. <Link to={`${PATHS.settings}#dados`}>Gerenciar dados</Link>
+          <span className={styles.long}>
+            Atletas, notas, treinos e partidas marcados como “Demo” são fictícios e não representam resultados reais do
+            Alpha7.{' '}
+          </span>
+          <Link to={`${PATHS.settings}#dados`}>Gerenciar dados</Link>
         </Notice>
       )}
       {!persistent && (

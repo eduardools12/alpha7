@@ -28,12 +28,14 @@ export const emptyWorkspace = () => createEmptyWorkspace();
 interface RenderOptions {
   path?: string;
   workspace?: Workspace;
+  /** Reaproveita um armazenamento existente: simula recarregar a página com os mesmos dados. */
+  storage?: ReturnType<typeof createMemoryStorage>;
   /** Substitui o gateway (por exemplo, para simular falhas de gravação). */
   wrapGateway?: (gateway: LocalStorageGateway) => DataGateway;
 }
 
-export function renderApp({ path = '/', workspace, wrapGateway }: RenderOptions = {}) {
-  const storage = createMemoryStorage();
+export function renderApp({ path = '/', workspace, wrapGateway, storage: existing }: RenderOptions = {}) {
+  const storage = existing ?? createMemoryStorage();
   const local = new LocalStorageGateway(storage, () => structuredClone(workspace ?? demoWorkspace()));
   const gateway = wrapGateway ? wrapGateway(local) : local;
   const user = userEvent.setup();

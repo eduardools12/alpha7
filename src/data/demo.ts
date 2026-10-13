@@ -3,6 +3,7 @@ import { createEmptyLineup, type Lineup } from '@/domain/lineup';
 import { cloneWeights, DEFAULT_OVERALL_WEIGHTS } from '@/domain/overall';
 import type { Evaluation, Player, PlayerStatus, UniformColor } from '@/domain/player';
 import type { Position } from '@/domain/positions';
+import { createDemoTrainings } from './demoTrainings';
 import type { ActivitySnapshot, Workspace } from './types';
 
 /**
@@ -139,11 +140,10 @@ export function createDemoWorkspace(now: Date = new Date()): Workspace {
   const day = 24 * 60 * 60 * 1000;
   const nextMatchDate = new Date(now.getTime() + 3 * day);
   nextMatchDate.setHours(19, 30, 0, 0);
-  const lastTrainingDate = new Date(now.getTime() - 1 * day);
 
+  // Só a atividade competitiva é demonstração fixa; treinos vêm de registros reais (e dos treinos demo abaixo).
   const activity: ActivitySnapshot = {
     demo: true,
-    trainingsCount: 42,
     matches: { played: 14, wins: 11 },
     nextMatch: {
       opponent: 'Rivals FC',
@@ -151,13 +151,9 @@ export function createDemoWorkspace(now: Date = new Date()): Workspace {
       scheduledAt: `${nextMatchDate.getFullYear()}-${pad(nextMatchDate.getMonth() + 1)}-${pad(nextMatchDate.getDate())}T19:30`,
       venue: 'Quadra principal (demo)',
     },
-    lastTraining: {
-      date: `${lastTrainingDate.getFullYear()}-${pad(lastTrainingDate.getMonth() + 1)}-${pad(lastTrainingDate.getDate())}`,
-      focus: 'Transição e saque',
-      attendance: { present: 17, total: 18 },
-      intensity: 'alta',
-    },
   };
+
+  const demoTrainings = createDemoTrainings(players, evaluations, now);
 
   return {
     players,
@@ -165,6 +161,9 @@ export function createDemoWorkspace(now: Date = new Date()): Workspace {
     lineups: [lineup],
     settings: { weights: cloneWeights(DEFAULT_OVERALL_WEIGHTS) },
     activity,
+    trainings: demoTrainings.trainings,
+    exercises: demoTrainings.exercises,
+    trainingEvents: demoTrainings.events,
   };
 }
 
@@ -175,5 +174,8 @@ export function createEmptyWorkspace(): Workspace {
     lineups: [],
     settings: { weights: cloneWeights(DEFAULT_OVERALL_WEIGHTS) },
     activity: null,
+    trainings: [],
+    exercises: [],
+    trainingEvents: [],
   };
 }

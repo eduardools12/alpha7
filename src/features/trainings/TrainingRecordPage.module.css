@@ -1,0 +1,486 @@
+/* Tela de registro: pensada primeiro para o celular (polegar, botões grandes, pouca digitação). */
+.layout {
+  display: grid;
+  gap: var(--s-5);
+  align-items: start;
+}
+
+@media (min-width: 64rem) {
+  .layout {
+    grid-template-columns: minmax(0, 1fr) 22rem;
+  }
+}
+
+.controls,
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.label {
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  color: var(--a7-lilac-100);
+}
+
+/* Listas horizontais com rolagem no celular; quebram em linhas a partir de telas médias. */
+.scroller {
+  display: flex;
+  gap: var(--s-2);
+  padding: 2px 2px var(--s-2);
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  /* No celular a rolagem é por gesto; a barra só poluiria. O corte do último item indica que há mais. */
+  scrollbar-width: none;
+}
+
+.scroller::-webkit-scrollbar {
+  display: none;
+}
+
+@media (min-width: 48rem) {
+  .scroller {
+    flex-wrap: wrap;
+    overflow-x: visible;
+  }
+}
+
+.scroller > * {
+  flex: none;
+  scroll-snap-align: start;
+}
+
+.pill {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--tap);
+  padding: var(--s-2) var(--s-4);
+  background: transparent;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  color: var(--a7-lilac-100);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.pill small {
+  font-size: 0.68rem;
+  font-weight: 500;
+  opacity: 0.85;
+}
+
+.pill:hover {
+  background: rgb(185 166 208 / 0.12);
+}
+
+.pill[aria-pressed='true'] {
+  background: var(--a7-lilac-300);
+  border-color: var(--a7-lilac-300);
+  color: var(--a7-purple-950);
+}
+
+.player {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 5.6rem;
+  min-height: 5.6rem;
+  padding: var(--s-2) var(--s-1);
+  background: var(--surface-1);
+  border: 2px solid var(--line);
+  border-radius: var(--r-md);
+  color: var(--text);
+}
+
+.player:hover {
+  border-color: var(--a7-lilac-500);
+}
+
+.player[aria-pressed='true'] {
+  background: var(--surface-purple-2);
+  border-color: var(--a7-lilac-100);
+  box-shadow: 0 0 0 2px var(--focus);
+}
+
+.avatar {
+  width: 2.8rem;
+  height: 2.8rem;
+}
+
+.playerName {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.playerCount {
+  position: absolute;
+  top: 0.2rem;
+  right: 0.3rem;
+  min-width: 1.3rem;
+  padding: 0 0.3rem;
+  border-radius: var(--r-pill);
+  background: var(--bg-sunken);
+  color: var(--a7-lilac-100);
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.3rem;
+  text-align: center;
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  padding: var(--s-3) var(--s-4) var(--s-4);
+  background: linear-gradient(160deg, var(--surface-purple-2), var(--surface-purple));
+  border: 1px solid rgb(185 166 208 / 0.2);
+  border-radius: var(--r-lg);
+}
+
+/*
+ * No celular, depois de escolher o jogador o painel de resultado fica fixo logo acima da
+ * barra inferior: os botões mais usados ficam sempre ao alcance do polegar, mesmo rolando
+ * pelas listas. Antes disso (sem jogador) ele segue o fluxo normal para não cobrir a lista
+ * de jogadores. No desktop ele nunca é fixo.
+ */
+@media (max-width: 59.99rem) {
+  .armed {
+    position: sticky;
+    bottom: calc(var(--bottom-nav-height) + var(--s-2) + env(safe-area-inset-bottom));
+    z-index: 12;
+    box-shadow: 0 -10px 24px rgb(0 0 0 / 0.5);
+  }
+  .outcome {
+    min-height: 4.1rem;
+  }
+  .outcomeLabel {
+    font-size: 1.7rem;
+  }
+  .outcomes {
+    gap: var(--s-2);
+  }
+  /* Com 3 resultados cabem numa só linha. */
+  .outcomes[data-count='3'] {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .outcomes[data-count='3'] .outcome:last-child {
+    grid-column: auto;
+  }
+  .outcomeShort {
+    font-size: 0.7rem;
+  }
+  /* O contexto ("Registrando para...") já diz o que o título diria: o título fica só para leitores de tela. */
+  .panel > h2 {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+.context {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+@media (max-width: 59.99rem) {
+  /* Uma linha só: o painel fixo precisa ser baixo para não esconder as listas. */
+  .context {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
+
+.context strong {
+  color: var(--text);
+}
+
+.outcomes {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--s-3);
+}
+
+/* 3 resultados (saque, bloqueio, defesa): três colunas e a última linha preenchida. */
+.outcomes[data-count='3'] .outcome:last-child {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 40rem) {
+  .outcomes[data-count='3'] {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .outcomes[data-count='3'] .outcome:last-child {
+    grid-column: auto;
+  }
+  .outcomes[data-count='4'] {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.outcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: 5.75rem;
+  padding: var(--s-3) var(--s-2);
+  border: 2px solid transparent;
+  border-radius: var(--r-md);
+  color: #fff;
+  text-align: center;
+  transition:
+    transform 0.08s,
+    filter 0.15s;
+}
+
+.outcome[data-tone='good'] {
+  background: var(--outcome-good);
+}
+.outcome[data-tone='ok'] {
+  background: var(--outcome-ok);
+}
+.outcome[data-tone='warn'] {
+  background: var(--outcome-warn);
+  color: var(--outcome-warn-text);
+}
+.outcome[data-tone='bad'] {
+  background: var(--outcome-bad);
+}
+.outcome[data-tone='neutral'] {
+  background: var(--outcome-neutral);
+  border-color: var(--line-strong);
+}
+
+.outcome:hover:not(:disabled) {
+  filter: brightness(1.12);
+}
+
+.outcome:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.outcome:disabled {
+  opacity: 0.4;
+}
+
+.outcomeLabel {
+  font-family: var(--font-display);
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.outcomeShort {
+  font-size: 0.8rem;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/* Confirmação visual do registro no próprio botão tocado. */
+.flash {
+  animation: confirm 0.6s ease-out;
+}
+
+@keyframes confirm {
+  0% {
+    box-shadow: 0 0 0 0 rgb(255 255 255 / 0.95);
+  }
+  100% {
+    box-shadow: 0 0 0 16px rgb(255 255 255 / 0);
+  }
+}
+
+.count {
+  padding: var(--s-3);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+
+.count strong {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+}
+
+.breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1) var(--s-4);
+  margin-top: var(--s-1);
+  color: var(--text-muted);
+}
+
+.breakdown b {
+  color: var(--text);
+}
+
+.criteria {
+  padding: 0 var(--s-4);
+  background: var(--surface-1);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.criteria[open] {
+  padding-bottom: var(--s-4);
+}
+
+.criteria summary {
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  color: var(--a7-lilac-100);
+  font-weight: 600;
+}
+
+.criteria dl {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.criteria dt {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.criteria dd {
+  margin: 0;
+}
+
+/* Faixa sobreposta: não ocupa espaço (o conteúdo não "pula" sob o dedo) e some sozinha. */
+.toast {
+  position: fixed;
+  top: 4rem;
+  right: var(--s-3);
+  left: var(--s-3);
+  z-index: 40;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
+@media (min-width: 60rem) {
+  .toast {
+    top: var(--s-4);
+    left: calc(var(--sidebar-width) + var(--s-4));
+    right: var(--s-4);
+  }
+}
+
+.toastText {
+  width: 100%;
+  max-width: 34rem;
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-left-width: 5px;
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-pop);
+  font-weight: 600;
+  animation: appear 0.18s ease-out;
+}
+
+.registered {
+  border-left-color: var(--ok);
+}
+.undone {
+  border-left-color: var(--warn);
+}
+.error {
+  border-left-color: var(--danger);
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+.total {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+}
+
+.history li {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.dot {
+  flex: none;
+  width: 0.75rem;
+  height: 0.75rem;
+  margin-top: 0.4rem;
+  border-radius: 50%;
+  background: var(--outcome-neutral);
+}
+
+.dot[data-tone='good'] {
+  background: var(--outcome-good);
+}
+.dot[data-tone='ok'] {
+  background: var(--outcome-ok);
+}
+.dot[data-tone='warn'] {
+  background: var(--outcome-warn);
+}
+.dot[data-tone='bad'] {
+  background: var(--outcome-bad);
+}
+
+.historyText {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: var(--fs-sm);
+}
+
+.historyText small {
+  color: var(--text-muted);
+}
+
+.footer {
+  display: flex;
+}

@@ -22,7 +22,7 @@ export function Sidebar() {
           ))}
         </ul>
       </nav>
-      <p className={styles.foot}>Versão 0.1 · dados salvos neste navegador</p>
+      <p className={styles.foot}>Versão 0.2 · dados salvos neste navegador</p>
     </aside>
   );
 }

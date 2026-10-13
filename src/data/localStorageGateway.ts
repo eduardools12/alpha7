@@ -1,14 +1,20 @@
 import { isValidAttributeValue, ATTRIBUTE_KEYS } from '@/domain/attributes';
+import { toFundamentalResult } from '@/domain/fundamentals';
 import { COURT_SLOTS, FORMATIONS, type Lineup } from '@/domain/lineup';
 import { cloneWeights, DEFAULT_OVERALL_WEIGHTS, validatePositionWeights, type OverallWeights } from '@/domain/overall';
 import { PLAYER_STATUSES, UNIFORM_COLORS, type Evaluation, type Player } from '@/domain/player';
 import { isPosition, POSITIONS } from '@/domain/positions';
+import { TRAINING_STATUSES, type Training, type TrainingEvent, type TrainingExercise } from '@/domain/training';
 import { createDemoWorkspace } from './demo';
-import { StorageCorruptedError, type DataGateway } from './gateway';
-import type { Settings, Workspace } from './types';
+import { IntegrityError, StorageCorruptedError, type DataGateway } from './gateway';
+import type { ActivitySnapshot, Settings, Workspace } from './types';
 
 export const STORAGE_KEY = 'alpha7.workspace.v1';
 export const CORRUPT_BACKUP_KEY = 'alpha7.workspace.v1.corrupt';
+/**
+ * Versão do formato. Campos novos são ADITIVOS: dados salvos antes dos treinos (sem
+ * trainings/exercises/trainingEvents) continuam válidos e abrem com essas listas vazias.
+ */
 const SCHEMA_VERSION = 1;
 
 type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
@@ -27,6 +33,8 @@ function browserStorage(): StorageLike | null {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const isString = (value: unknown): value is string => typeof value === 'string';
 
 function looksLikePlayer(value: unknown): value is Player {
   return (
@@ -63,6 +71,36 @@ function looksLikeLineup(value: unknown): value is Lineup {
   );
 }
 
+function looksLikeTraining(value: unknown): value is Training {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.name) &&
+    isString(value.date) &&
+    Array.isArray(value.participantIds) &&
+    value.participantIds.every(isString) &&
+    (TRAINING_STATUSES as readonly string[]).includes(value.status as string)
+  );
+}
+
+function looksLikeExercise(value: unknown): value is TrainingExercise {
+  return isRecord(value) && isString(value.id) && isString(value.trainingId) && isString(value.name) && typeof value.order === 'number';
+}
+
+function looksLikeTrainingEvent(value: unknown): value is TrainingEvent {
+  return (
+    isRecord(value) &&
+    isString(value.id) &&
+    isString(value.trainingId) &&
+    isString(value.exerciseId) &&
+    isString(value.playerId) &&
+    isString(value.attemptKey) &&
+    isString(value.recordedAt) &&
+    (value.voidedAt === null || isString(value.voidedAt)) &&
+    toFundamentalResult(value.fundamental, value.outcome) !== null
+  );
+}
+
 function readWeights(value: unknown): OverallWeights {
   if (!isRecord(value)) return cloneWeights(DEFAULT_OVERALL_WEIGHTS);
   const result = cloneWeights(DEFAULT_OVERALL_WEIGHTS);
@@ -73,6 +111,24 @@ function readWeights(value: unknown): OverallWeights {
     if (validatePositionWeights(merged) === null) result[position] = merged;
   }
   return result;
+}
+
+function readActivity(value: unknown): ActivitySnapshot | null {
+  if (!isRecord(value) || value.demo !== true || !isRecord(value.matches)) return null;
+  const matches = value.matches;
+  if (typeof matches.played !== 'number' || typeof matches.wins !== 'number') return null;
+  return {
+    demo: true,
+    matches: { played: matches.played, wins: matches.wins },
+    nextMatch: isRecord(value.nextMatch) ? (value.nextMatch as unknown as ActivitySnapshot['nextMatch']) : null,
+  };
+}
+
+/** Lista que pode faltar em dados antigos (vira vazia), mas se existir deve ser válida. */
+function optionalList<T>(value: unknown, guard: (item: unknown) => item is T, label: string): T[] {
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || !value.every(guard)) throw new StorageCorruptedError(label);
+  return value;
 }
 
 function parseWorkspace(raw: string): Workspace {
@@ -95,13 +151,17 @@ function parseWorkspace(raw: string): Workspace {
     evaluations,
     lineups,
     settings: { weights: readWeights(isRecord(settings) ? settings.weights : undefined) },
-    activity: isRecord(activity) && activity.demo === true ? (activity as unknown as Workspace['activity']) : null,
+    activity: readActivity(activity),
+    trainings: optionalList(data.trainings, looksLikeTraining, 'treinos inválidos'),
+    exercises: optionalList(data.exercises, looksLikeExercise, 'exercícios inválidos'),
+    trainingEvents: optionalList(data.trainingEvents, looksLikeTrainingEvent, 'registros de treino inválidos'),
   };
 }
 
 /**
  * Persistência em localStorage: provisória e local a um navegador. Não é o backend
- * definitivo (veja docs/DATA_MODEL.md). Sem armazenamento disponível, mantém tudo em memória.
+ * definitivo (veja docs/DATA_MODEL.md) e NÃO sincroniza com a nuvem. Sem armazenamento
+ * disponível, mantém tudo em memória.
  */
 export class LocalStorageGateway implements DataGateway {
   readonly persistent: boolean;
@@ -178,15 +238,71 @@ export class LocalStorageGateway implements DataGateway {
     this.write(workspace);
   }
 
+  async saveTraining(training: Training, exercises: TrainingExercise[]): Promise<void> {
+    this.update((ws) => {
+      if (exercises.some((e) => e.trainingId !== training.id)) {
+        throw new IntegrityError('Há exercício ligado a outro treino.');
+      }
+      const keptIds = new Set(exercises.map((e) => e.id));
+      const orphaned = ws.trainingEvents.find((e) => e.trainingId === training.id && !keptIds.has(e.exerciseId));
+      if (orphaned) throw new IntegrityError('Não é possível remover um exercício que tem registros.');
+      const strandedPlayer = ws.trainingEvents.find(
+        (e) => e.trainingId === training.id && e.voidedAt === null && !training.participantIds.includes(e.playerId),
+      );
+      if (strandedPlayer) throw new IntegrityError('Não é possível remover da lista um atleta que tem registros válidos.');
+
+      const exists = ws.trainings.some((t) => t.id === training.id);
+      ws.trainings = exists ? ws.trainings.map((t) => (t.id === training.id ? training : t)) : [...ws.trainings, training];
+      ws.exercises = [...ws.exercises.filter((e) => e.trainingId !== training.id), ...exercises];
+    });
+  }
+
+  async deleteTraining(trainingId: string): Promise<void> {
+    this.update((ws) => {
+      ws.trainings = ws.trainings.filter((t) => t.id !== trainingId);
+      ws.exercises = ws.exercises.filter((e) => e.trainingId !== trainingId);
+      ws.trainingEvents = ws.trainingEvents.filter((e) => e.trainingId !== trainingId);
+    });
+  }
+
+  async addTrainingEvent(event: TrainingEvent): Promise<void> {
+    this.update((ws) => {
+      if (ws.trainingEvents.some((e) => e.attemptKey === event.attemptKey)) return false; // idempotente
+      const training = ws.trainings.find((t) => t.id === event.trainingId);
+      if (!training) throw new IntegrityError('O treino deste registro não existe.');
+      const exercise = ws.exercises.find((e) => e.id === event.exerciseId);
+      if (!exercise || exercise.trainingId !== training.id) {
+        throw new IntegrityError('O exercício deste registro não pertence ao treino.');
+      }
+      if (!ws.players.some((p) => p.id === event.playerId)) throw new IntegrityError('O atleta deste registro não existe.');
+      if (!training.participantIds.includes(event.playerId)) {
+        throw new IntegrityError('O atleta deste registro não participa do treino.');
+      }
+      ws.trainingEvents = [...ws.trainingEvents, event];
+      return true;
+    });
+  }
+
+  async voidTrainingEvent(eventId: string, voidedAt: string): Promise<void> {
+    this.update((ws) => {
+      const target = ws.trainingEvents.find((e) => e.id === eventId);
+      if (!target) throw new IntegrityError('O registro a desfazer não existe.');
+      if (target.voidedAt !== null) return false; // já desfeito
+      ws.trainingEvents = ws.trainingEvents.map((e) => (e.id === eventId ? { ...e, voidedAt } : e));
+      return true;
+    });
+  }
+
   private current(): Workspace {
     if (!this.storage) return (this.memory ??= this.createSeed());
     const raw = this.storage.getItem(STORAGE_KEY);
     return raw === null ? this.createSeed() : parseWorkspace(raw);
   }
 
-  private update(mutate: (workspace: Workspace) => void): void {
+  /** `mutate` pode devolver false para indicar "nada mudou" e evitar uma gravação inútil. */
+  private update(mutate: (workspace: Workspace) => void | boolean): void {
     const workspace = structuredClone(this.current());
-    mutate(workspace);
+    if (mutate(workspace) === false) return;
     this.write(workspace);
   }
 

@@ -79,6 +79,61 @@ test.describe('fluxos principais no navegador real', () => {
     await expect(page.getByRole('link', { name: 'André N., camisa 3, Ponteiro, Overall 66' })).toBeVisible();
   });
 
+  test('treino completo: criar, registrar vários fundamentos no celular, desfazer, recarregar e ver o resumo', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto('/treinos/novo');
+    await page.getByLabel('Nome do treino').fill('Treino E2E');
+    await page.getByRole('button', { name: 'Adicionar exercício' }).click();
+    await page.getByLabel('Exercício 1', { exact: true }).fill('Saque e recepção');
+    await page.getByRole('button', { name: 'Criar treino' }).click();
+    await expect(page.getByText('Treino criado.')).toBeVisible();
+
+    await page.getByRole('link', { name: 'Registrar' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Registrar treino' })).toBeVisible();
+    await page.getByRole('button', { name: /Gabriel S\., camisa 8/ }).click();
+
+    const tap = async (name: RegExp) => {
+      const button = page.getByRole('button', { name });
+      await expect(button).toBeEnabled();
+      await button.click();
+    };
+    const fundamento = page.getByRole('group', { name: 'Fundamento' });
+    await fundamento.getByRole('button', { name: 'Saque' }).click();
+    await tap(/^Ace, /);
+    await tap(/^Válido, /);
+    await fundamento.getByRole('button', { name: 'Recepção' }).click();
+    await tap(/^A, /);
+    await tap(/^Erro, /);
+    await fundamento.getByRole('button', { name: 'Ataque' }).click();
+    await tap(/^Ponto, /);
+    await expect(page.getByText('5 no treino')).toBeVisible(); // ace, válido, A, erro, ponto de ataque
+
+    await tap(/Desfazer último registro/); // desfaz o ponto de ataque
+    await expect(page.getByText('4 no treino')).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByText('4 no treino')).toBeVisible(); // persistiu
+
+    await page.getByRole('link', { name: 'Ver resumo' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Treino E2E' })).toBeVisible();
+    await expect(page.getByText('1 desfeitos, fora das contas')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Saque' })).toContainText('2 tentativas');
+    await expect(page.getByRole('region', { name: 'Saque' })).toContainText('Amostra insuficiente');
+    await expect(page.getByRole('region', { name: 'Recepção' })).toContainText('2 tentativas');
+    await expect(page.getByText('Sem tentativas registradas em: Levantamento, Ataque, Bloqueio, Defesa.')).toBeVisible();
+  });
+
+  test('excluir treino pela lista apaga só aquele e continua assim após recarregar', async ({ page }) => {
+    await page.goto('/treinos');
+    await page.getByRole('button', { name: 'Excluir Ataque e bloqueio' }).click();
+    await expect(page.getByText(/Serão apagados 2 exercícios e \d+ registros/)).toBeVisible();
+    await page.getByRole('button', { name: 'Confirmar exclusão' }).click();
+    await expect(page.getByText('Ataque e bloqueio')).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByText('Transição e saque')).toBeVisible();
+    await expect(page.getByText('Ataque e bloqueio')).toHaveCount(0);
+  });
+
   test('apagar todos os dados leva aos estados vazios', async ({ page }) => {
     await page.goto('/configuracoes');
     await page.getByRole('button', { name: 'Apagar todos os dados' }).click();

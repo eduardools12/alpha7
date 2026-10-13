@@ -29,7 +29,7 @@
   /* Texto */
   --text: var(--a7-mist);
   --text-muted: #b6aec3;
-  --text-faint: #9187a2;
+  --text-faint: #a096b0; /* ≥ 4,5:1 também sobre --surface-2 (verificado com axe) */
   --text-on-accent: #ffffff;
 
   /* Linhas */
@@ -45,6 +45,15 @@
   --danger-bg: rgb(240 106 106 / 0.16);
   --info: #8a94ee;
   --info-bg: rgb(138 148 238 / 0.18);
+
+  /* Resultados de uma tentativa (botões de registro e barras de distribuição).
+     Verde/azul-violeta/vermelho levam texto branco; laranja leva texto escuro (≥ 4,5:1). */
+  --outcome-good: #1f7a4a;
+  --outcome-ok: #5560c8;
+  --outcome-warn: #f2a03d;
+  --outcome-bad: #c73b3b;
+  --outcome-neutral: #37323f;
+  --outcome-warn-text: #1b1100;
 
   /* Ação */
   --accent: var(--a7-violet-500);

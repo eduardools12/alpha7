@@ -18,7 +18,7 @@ Princípios:
 | Usuário | Necessidade | Estado |
 |---|---|---|
 | Treinador / comissão técnica | Avaliar atletas, escalar, planejar | Atendido (elenco, avaliações, escalação) |
-| Analista / auxiliar (registro em quadra) | Registrar fundamentos em treino e pontos em partida pelo celular, com rapidez | Planejado (referências 06 e 08) |
+| Analista / auxiliar (registro em quadra) | Registrar fundamentos em treino e pontos em partida pelo celular, com rapidez | Treino: atendido (referência 06). Partida: planejado (referência 08) |
 | Atleta | Consultar o próprio perfil e evolução | Planejado (exige autenticação) |
 
 Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem login na v0.1.
@@ -37,7 +37,10 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Escalação | Editor: 6 titulares, líbero, reservas, papel tático, ordem de saque base, prévia do rodízio, salvar, listar, excluir | Parcial |
 | Escalação | Gerador de arte (pôster, referência 05) | Planejado |
 | Dashboard | Indicadores de elenco e Overall médio, destaques e evolução (reais); treinos e partidas (demonstração) | Parcial |
-| Treinos | Treino com vários exercícios, registro rápido de fundamentos com desfazer, presença, intensidade | Planejado |
+| Treinos | Criar, editar, excluir e listar treinos (nome, data, duração, descrição, observações, responsável), participantes do elenco, vários exercícios, conclusão/reabertura | Feito (v0.2) |
+| Treinos | Registro rápido de tentativas por fundamento (saque, recepção, levantamento, ataque, bloqueio, defesa), com feedback, histórico recente e desfazer | Feito (v0.2) |
+| Treinos | Resumo pós-treino: estatísticas por fundamento com tentativas e denominadores, distribuição da recepção, eficiência de ataque, qualidade do levantamento, resultados individuais, comparação com limite de amostra | Feito (v0.2) |
+| Treinos | Intensidade da sessão, presença separada da lista de participantes, plano de treino (carga, objetivos) | Planejado |
 | Partidas | Placar por set, saque e rotação, rallies com motivo do ponto, correções com histórico | Planejado |
 | Estatísticas | Taxas de ace, ataque, side-out, bloqueio; recepção A/B/C/erro; comparação de atacantes; exportar relatório | Planejado |
 | Dados | Persistência em localStorage, restaurar demonstração, apagar tudo | Feito (provisório) |
@@ -51,18 +54,20 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 
 ## 4. Escopo
 
-**Primeira entrega (v0.1, concluída):** tudo marcado Feito e Parcial acima.
+**Primeira entrega (v0.1, concluída):** elenco, avaliações, Overall, escalações, dashboard.
 
-**Fora do escopo da v0.1:** backend, autenticação, upload de fotos, treinos, partidas, estatísticas reais, gerador de artes, exportação de relatórios, notificações.
+**Módulo de Treinos (v0.2, concluído):** tudo marcado "Feito (v0.2)" acima. Persistência continua em `localStorage` (sem Supabase, sem sincronização).
+
+**Fora do escopo até aqui:** backend, autenticação, upload de fotos, partidas, estatísticas consolidadas por período, gerador de artes, exportação de relatórios, notificações.
 
 ## 5. Prioridades (próximas etapas, em ordem)
 
-1. **Treinos** (referência 06): registro rápido de fundamentos com desfazer e critérios de recepção validados. Gera os primeiros dados observados reais.
-2. **Backend Supabase** com RLS por equipe e migração do localStorage (o contrato `DataGateway` já isola a troca).
-3. **Partidas** (referência 08): sets, rallies, correções.
-4. **Estatísticas** (referência 07): calculadas dos registros válidos, com contexto de tentativas.
+1. **Validar com a comissão técnica** os critérios de registro adotados (`docs/METRICS.md`, seção C): recepção A/B/C/erro, levantamento, "outra tentativa" no ataque e o limite de amostra. Os números do módulo de treinos dependem dessas definições.
+2. **Backend Supabase** com RLS por equipe e migração do localStorage (o contrato `DataGateway` já isola a troca; `DATA_MODEL.md` traz o SQL proposto).
+3. **Partidas** (referência 08): sets, rallies, correções, reaproveitando a taxonomia de fundamentos (eventos em coleção própria).
+4. **Estatísticas** (referência 07): consolidação entre treinos, com recortes de período e evolução.
 5. **Gerador de artes** (referência 05) a partir de uma escalação salva.
-6. Fotos dos atletas (Storage) e autenticação por papéis.
+6. Fotos dos atletas (Storage) e autenticação por papéis (e então "responsável" deixa de ser texto livre).
 
 ## 6. Critérios de aceitação
 
@@ -78,8 +83,23 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 - [x] Funciona de 360px a 1920px sem rolagem horizontal; navegação por teclado; alvos de toque de 44px.
 - [x] Tipos, testes e build passam.
 
+### Módulo de Treinos (v0.2: verificados por testes automatizados e conferência visual)
+
+- [x] Criar, editar e excluir treinos; cada treino tem identificação própria; exercícios e participantes (do elenco) ficam ligados ao treino.
+- [x] Editar nome, descrição ou observações **preserva** todos os registros; exercício ou participante com registros não pode ser removido.
+- [x] Excluir pede confirmação com a contagem do que será apagado e remove, em cascata, só os exercícios e registros daquele treino.
+- [x] Registrar um resultado cria exatamente 1 tentativa vinculada a treino, exercício, jogador, fundamento, resultado, data e hora.
+- [x] Jogador, exercício e fundamento permanecem selecionados entre registros; feedback visual e textual a cada toque; histórico recente.
+- [x] Toque duplo acidental não duplica; desfazer anula só o último registro (preservando o histórico) e repetir o toque não desfaz dois.
+- [x] Os registros persistem após recarregar; falha de gravação avisa e não deixa registro pela metade.
+- [x] Fórmulas de saque, recepção (distribuição e nota interna), levantamento, ataque (eficiência), bloqueio e defesa calculadas só de registros válidos, com tentativas e denominadores; sem tentativas = "—", nunca 0%.
+- [x] A qualidade do levantamento é um indicador separado do resultado do ataque.
+- [x] Amostra insuficiente (menos de 10 tentativas) é sinalizada; comparação entre participantes só entre quem tem amostra adequada e apenas com 2 ou mais atletas nessa condição.
+- [x] Critérios de cada resultado visíveis na tela de registro.
+- [x] Usável no celular: painel de resultado fixo ao alcance do polegar, alvos de 44px, sem rolagem horizontal da página.
+- [x] Registrar tentativas não altera notas técnicas nem Overall.
+
 ### Módulos futuros (resumo; detalhar antes de implementar)
 
-- **Treinos:** registrar um fundamento cria exatamente 1 tentativa; desfazer remove a última sem apagar o histórico; estatísticas só usam registros válidos; critérios A/B/C/erro visíveis na tela.
 - **Partidas:** placar respeita o formato da competição; cada ponto tem motivo (ou "não informado"); correção gera nova versão e preserva a anterior.
 - **Estatísticas:** todo percentual exibe "x de y"; sem tentativas, "indisponível".

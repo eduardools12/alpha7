@@ -8,19 +8,13 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { useWorkspace } from '@/data/WorkspaceProvider';
-import type { TrainingIntensity } from '@/data/types';
 import { formatDate, formatDateTime, formatSigned, monthShort } from '@/domain/format';
 import { biggestRisers, playerStandings, teamOverallSeries, topByOverall } from '@/domain/insights';
 import { average, formatPercent, formatRatioContext, ratio, UNAVAILABLE } from '@/domain/metrics';
 import { shortName } from '@/domain/player';
 import { POSITION_LABEL } from '@/domain/positions';
+import { validEvents } from '@/domain/training';
 import styles from './DashboardPage.module.css';
-
-const INTENSITY: Record<TrainingIntensity, { label: string; level: number }> = {
-  baixa: { label: 'Baixa', level: 1 },
-  media: { label: 'Média', level: 2 },
-  alta: { label: 'Alta', level: 3 },
-};
 
 function Tile({
   label,
@@ -46,7 +40,7 @@ function Tile({
 
 export function DashboardPage() {
   const { data } = useWorkspace();
-  const { players, evaluations, settings, activity } = data;
+  const { players, evaluations, settings, activity, trainings, exercises, trainingEvents } = data;
 
   const standings = useMemo(
     () => playerStandings(players, evaluations, settings.weights),
@@ -60,7 +54,7 @@ export function DashboardPage() {
   const top = topByOverall(standings, 3);
   const risers = biggestRisers(standings, 3);
 
-  if (players.length === 0 && !activity) {
+  if (players.length === 0 && !activity && trainings.length === 0) {
     return (
       <>
         <PageHeader title="Alpha7 Performance" subtitle="Dashboard principal" />
@@ -82,8 +76,14 @@ export function DashboardPage() {
 
   const byStatus = (status: string) => players.filter((p) => p.status === status).length;
   const win = activity ? ratio(activity.matches.wins, activity.matches.played) : null;
-  const lastTraining = activity?.lastTraining ?? null;
-  const attendance = lastTraining ? ratio(lastTraining.attendance.present, lastTraining.attendance.total) : null;
+  const concluded = trainings.filter((t) => t.status === 'concluido');
+  const ongoing = trainings.length - concluded.length;
+  const allTrainingsDemo = trainings.length > 0 && trainings.every((t) => t.demo);
+  const lastTraining = [...trainings].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt))[0] ?? null;
+  const lastTrainingEvents = lastTraining ? validEvents(trainingEvents.filter((e) => e.trainingId === lastTraining.id)) : [];
+  const lastTrainingExercises = lastTraining ? exercises.filter((e) => e.trainingId === lastTraining.id).length : 0;
+  const activeCount = players.filter((p) => p.status === 'ativo').length;
+  const participation = lastTraining ? ratio(Math.min(lastTraining.participantIds.length, activeCount), activeCount) : null;
 
   return (
     <>
@@ -105,10 +105,14 @@ export function DashboardPage() {
           }
         />
         <Tile
-          label="Treinos realizados"
-          value={activity ? String(activity.trainingsCount) : UNAVAILABLE}
-          detail={activity ? 'Registro de treinos em desenvolvimento' : 'Sem registros'}
-          demo={activity !== null}
+          label="Treinos concluídos"
+          value={String(concluded.length)}
+          detail={
+            trainings.length === 0
+              ? 'Nenhum treino cadastrado ainda'
+              : `${trainingEvents.length === 0 ? 'Sem registros' : `${validEvents(trainingEvents).length} registros válidos`}${ongoing > 0 ? ` · ${ongoing} em andamento` : ''}`
+          }
+          demo={allTrainingsDemo}
         />
         <Tile
           label="Partidas disputadas"
@@ -138,37 +142,43 @@ export function DashboardPage() {
           )}
         </Card>
 
-        <Card title="Resumo do último treino" titleAside={lastTraining ? <DemoTag /> : undefined}>
-          {lastTraining && attendance ? (
-            <dl className={styles.facts}>
-              <div>
-                <dt>Data</dt>
-                <dd>{formatDate(lastTraining.date)}</dd>
-              </div>
-              <div>
-                <dt>Foco</dt>
-                <dd>{lastTraining.focus}</dd>
-              </div>
-              <div>
-                <dt>Presença</dt>
-                <dd>
-                  {formatPercent(attendance, 0)} <span className={styles.muted}>({formatRatioContext(attendance)})</span>
-                </dd>
-              </div>
-              <div>
-                <dt>Intensidade</dt>
-                <dd>
-                  <span className={styles.meter} aria-hidden="true">
-                    {[1, 2, 3].map((n) => (
-                      <i key={n} className={n <= INTENSITY[lastTraining.intensity].level ? styles.on : ''} />
-                    ))}
-                  </span>{' '}
-                  {INTENSITY[lastTraining.intensity].label}
-                </dd>
-              </div>
-            </dl>
+        <Card title="Resumo do último treino" titleAside={lastTraining?.demo ? <DemoTag /> : undefined}>
+          {lastTraining ? (
+            <>
+              <dl className={styles.facts}>
+                <div>
+                  <dt>Treino</dt>
+                  <dd>{lastTraining.name}</dd>
+                </div>
+                <div>
+                  <dt>Data</dt>
+                  <dd>{formatDate(lastTraining.date)}</dd>
+                </div>
+                <div>
+                  <dt>Participantes</dt>
+                  <dd>
+                    {lastTraining.participantIds.length}{' '}
+                    {participation && participation.attempts > 0 && (
+                      <span className={styles.muted}>({formatRatioContext(participation)} ativos)</span>
+                    )}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Exercícios e registros</dt>
+                  <dd>
+                    {lastTrainingExercises} · {lastTrainingEvents.length}
+                  </dd>
+                </div>
+              </dl>
+              <ButtonLink to={PATHS.training(lastTraining.id)}>Ver resumo do treino</ButtonLink>
+            </>
           ) : (
-            <p className={styles.muted}>Nenhum treino registrado ainda.</p>
+            <>
+              <p className={styles.muted}>Nenhum treino cadastrado ainda.</p>
+              <ButtonLink to={PATHS.newTraining} icon="plus">
+                Criar treino
+              </ButtonLink>
+            </>
           )}
         </Card>
 

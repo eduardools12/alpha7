@@ -8,11 +8,13 @@ interface PageHeaderProps {
   subtitle?: string;
   back?: { to: string; label: string };
   actions?: ReactNode;
+  /** Cabeçalho menor em telas pequenas, para telas operacionais que precisam de espaço (registro rápido). */
+  compact?: boolean;
 }
 
-export function PageHeader({ title, subtitle, back, actions }: PageHeaderProps) {
+export function PageHeader({ title, subtitle, back, actions, compact = false }: PageHeaderProps) {
   return (
-    <header className={styles.header}>
+    <header className={`${styles.header} ${compact ? styles.compact : ''}`}>
       <div className={styles.text}>
         {back && (
           <Link to={back.to} className={styles.back}>
