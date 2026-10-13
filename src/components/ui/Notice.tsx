@@ -11,12 +11,14 @@ interface NoticeProps {
   title?: string;
   children?: ReactNode;
   action?: ReactNode;
+  /** Faixa de uma linha (avisos do sistema que acompanham toda tela): título e texto lado a lado. */
+  compact?: boolean;
 }
 
 /** Erros e avisos importantes usam role="alert"; informativos usam role="status". */
-export function Notice({ tone = 'info', title, children, action }: NoticeProps) {
+export function Notice({ tone = 'info', title, children, action, compact = false }: NoticeProps) {
   return (
-    <div className={`${styles.notice} ${styles[tone]}`} role={tone === 'error' || tone === 'warning' ? 'alert' : 'status'}>
+    <div className={`${styles.notice} ${styles[tone]} ${compact ? styles.compact : ''}`} role={tone === 'error' || tone === 'warning' ? 'alert' : 'status'}>
       <Icon name={ICON[tone]} size={20} className={styles.icon} />
       <div className={styles.body}>
         {title && <strong className={styles.title}>{title}</strong>}

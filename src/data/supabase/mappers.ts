@@ -66,6 +66,7 @@ export function playerFromRow(row: PlayerRow): Player {
     createdAt: toIso(row.created_at, `atleta ${row.id}`),
     updatedAt: toIso(row.updated_at, `atleta ${row.id}`),
     demo: row.demo,
+    ...(row.photo_path ? { photo: row.photo_path } : {}),
   };
 }
 
@@ -82,6 +83,7 @@ export const playerToRow = (teamId: string, player: Player): PlayerRow => ({
   created_at: player.createdAt,
   updated_at: player.updatedAt,
   demo: player.demo,
+  photo_path: player.photo ?? null,
 });
 
 /* ───────── avaliações ───────── */

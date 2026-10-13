@@ -150,13 +150,13 @@ export function MatchesListPage() {
             </EmptyState>
           ) : (
             <ul className={styles.grid}>
-              {matches.map((match) => {
+              {matches.map((match, index) => {
                 const state = stateFor(match, data.matchSets, data.rallies);
                 const result = resultText(match);
                 const done = match.status === 'concluida';
                 const outcome = outcomeOf(match);
                 return (
-                  <li key={match.id}>
+                  <li key={match.id} className="enter" style={{ '--i': Math.min(index, 8) } as React.CSSProperties}>
                     <Card as="article" className={styles.card}>
                       <header className={styles.head}>
                         <h2 className={styles.title}>Alpha7 x {match.opponent}</h2>

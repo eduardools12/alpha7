@@ -16,6 +16,7 @@ import {
 import { COURT_SLOTS, FORMATIONS, type Formation, type Lineup, type LineupStarter } from '@/domain/lineup';
 import { MAX_WEIGHT, validatePositionWeights, type OverallWeights } from '@/domain/overall';
 import { PLAYER_STATUSES, UNIFORM_COLORS, type Evaluation, type Player } from '@/domain/player';
+import { isDataUrl } from '@/domain/photo';
 import { isCourtRole, isPosition, POSITIONS } from '@/domain/positions';
 import {
   TRAINING_STATUSES,
@@ -287,7 +288,7 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
   const jerseys = new Map<number, string>();
   listOf(raw.players, 'players', issues).forEach((rec, i) => {
     const where = `Atleta ${i + 1}`;
-    const r = reader(rec, where, issues, ['id', 'name', 'jerseyNumber', 'primaryPosition', 'secondaryPosition', 'status', 'uniform', 'coachNotes', 'createdAt', 'updatedAt', 'demo']);
+    const r = reader(rec, where, issues, ['id', 'name', 'jerseyNumber', 'primaryPosition', 'secondaryPosition', 'status', 'uniform', 'coachNotes', 'createdAt', 'updatedAt', 'demo', 'photo']);
     const id = r.id();
     noteAtleta(id, where);
     const name = r.text('name', { min: 2, max: 200, trimmed: true });
@@ -305,13 +306,20 @@ export function validateWorkspace(raw: unknown): WorkspaceValidation {
     const createdAt = r.iso('createdAt');
     const updatedAt = r.iso('updatedAt');
     const demo = r.bool('demo');
+    // Foto opcional: imagem em data URL (modo local) ou caminho do arquivo da equipe (nuvem). Nada além disso entra.
+    let photo: string | undefined;
+    if (rec.photo !== undefined) {
+      const value = rec.photo;
+      if (typeof value === 'string' && value.length <= 420_000 && (isDataUrl(value) || /^[0-9a-f-]{36}\/[A-Za-z0-9_.-]{1,120}$/.test(value))) photo = value;
+      else r.fail('photo', 'deve ser uma imagem (JPEG, PNG ou WebP) em data URL, um caminho de foto da equipe ou ficar ausente.');
+    }
     if (jerseyNumber !== undefined) {
       const holder = jerseys.get(jerseyNumber);
       if (holder !== undefined) issues.error(`${where}: o número de camisa ${jerseyNumber} também é usado pelo atleta "${holder}".`);
       jerseys.set(jerseyNumber, id ?? where);
     }
     if (id !== undefined && name !== undefined && jerseyNumber !== undefined && primaryPosition && secondaryPosition !== undefined && status && uniform && coachNotes !== undefined && createdAt && updatedAt && demo !== undefined) {
-      players.push({ id, name, jerseyNumber, primaryPosition, secondaryPosition, status, uniform, coachNotes, createdAt, updatedAt, demo });
+      players.push({ id, name, jerseyNumber, primaryPosition, secondaryPosition, status, uniform, coachNotes, createdAt, updatedAt, demo, ...(photo ? { photo } : {}) });
     }
   });
   const playerIds = new Set(players.map((p) => p.id));

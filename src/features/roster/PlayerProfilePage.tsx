@@ -1,9 +1,11 @@
 import { Can } from '@/auth/AccessContext';
+import { PhotoEditor } from './PhotoEditor';
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
 import { AttributeBar } from '@/components/brand/AttributeBar';
 import { Jersey } from '@/components/brand/Jersey';
+import { PlayerPhoto } from '@/components/brand/PlayerPhoto';
 import { OverallShield } from '@/components/brand/OverallShield';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { ButtonLink } from '@/components/ui/Button';
@@ -97,8 +99,8 @@ export function PlayerProfilePage() {
       {flash && <Notice tone="success">{flash}</Notice>}
 
       <section className={styles.hero} aria-label="Resumo do atleta">
-        <div className={styles.jersey}>
-          <Jersey color={player.uniform} number={player.jerseyNumber} />
+        <div className={player.photo ? styles.portrait : styles.jersey}>
+          <PlayerPhoto player={player} fallback={<Jersey color={player.uniform} number={player.jerseyNumber} />} />
         </div>
         <div className={styles.identity}>
           <h2 className={styles.name}>{player.name}</h2>
@@ -113,6 +115,12 @@ export function PlayerProfilePage() {
         </div>
         <OverallShield overall={card.overall} size="lg" showLabel />
       </section>
+
+      <Can to="players:write">
+        <Card title="Foto do atleta">
+          <PhotoEditor player={player} />
+        </Card>
+      </Can>
 
       <div className={styles.grid}>
         <Card title="Avaliação de atributos (1–99)">

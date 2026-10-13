@@ -15,6 +15,7 @@ import {
 } from '@/domain/match';
 import { cloneWeights, DEFAULT_OVERALL_WEIGHTS, validatePositionWeights, type OverallWeights } from '@/domain/overall';
 import { PLAYER_STATUSES, UNIFORM_COLORS, type Evaluation, type Player } from '@/domain/player';
+import { isDataUrl } from '@/domain/photo';
 import { isCourtRole, isPosition, POSITIONS } from '@/domain/positions';
 import { TRAINING_STATUSES, type Training, type TrainingEvent, type TrainingExercise } from '@/domain/training';
 import { summarizeWorkspace } from './backup';
@@ -54,6 +55,9 @@ export const SNAPSHOT_KEY = 'alpha7.workspace.v1.snapshot';
 export const SEEN_KEY = 'alpha7.workspace.v1.seen';
 /** Chaves cuja presença indica uso anterior. */
 const PRIOR_SESSION_KEYS = [SEEN_KEY, SNAPSHOT_KEY, CORRUPT_BACKUP_KEY, LAST_BACKUP_KEY] as const;
+
+/** Teto da foto guardada no modo local (data URL em caracteres): ~300 KB de imagem. O recorte padrão fica bem abaixo. */
+export const MAX_PHOTO_CHARS = 420_000;
 
 /** Estimativa prudente do limite do localStorage por site (varia por navegador; costuma ser ~5 milhões de caracteres). */
 export const STORAGE_LIMIT_CHARS = 5_000_000;
@@ -100,7 +104,8 @@ function looksLikePlayer(value: unknown): value is Player {
     isPosition(value.primaryPosition) &&
     (value.secondaryPosition === null || isPosition(value.secondaryPosition)) &&
     (PLAYER_STATUSES as readonly string[]).includes(value.status as string) &&
-    (UNIFORM_COLORS as readonly string[]).includes(value.uniform as string)
+    (UNIFORM_COLORS as readonly string[]).includes(value.uniform as string) &&
+    (value.photo === undefined || (isString(value.photo) && value.photo.length <= MAX_PHOTO_CHARS && isDataUrl(value.photo)))
   );
 }
 
@@ -544,6 +549,29 @@ export class LocalStorageGateway implements DataGateway {
       ws.trainingEvents = ws.trainingEvents.map((e) => (e.id === eventId ? { ...e, voidedAt } : e));
       return true;
     });
+  }
+
+  /* ───────── fotos ───────── */
+
+  async uploadPlayerPhoto(_playerId: string, image: Blob): Promise<string> {
+    const reference = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(new IntegrityError('Não foi possível ler a imagem.'));
+      reader.readAsDataURL(image);
+    });
+    if (!isDataUrl(reference)) throw new IntegrityError('A imagem não está em um formato aceito (JPEG, PNG ou WebP).');
+    if (reference.length > MAX_PHOTO_CHARS) throw new IntegrityError('A foto é grande demais para guardar neste navegador. Escolha uma imagem menor.');
+    return reference;
+  }
+
+  async removePlayerPhoto(): Promise<void> {
+    // No modo local a foto vive dentro do próprio atleta: não há arquivo separado para apagar.
+  }
+
+  async photoUrl(reference: string): Promise<string> {
+    if (!isDataUrl(reference)) throw new IntegrityError('A foto guardada não está em um formato válido.');
+    return reference;
   }
 
   /* ───────── partidas ───────── */

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
 import { Jersey } from '@/components/brand/Jersey';
+import { PlayerPhoto } from '@/components/brand/PlayerPhoto';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -270,7 +271,7 @@ export function TrainingRecordPage() {
                     onClick={() => setPlayerId(player.id)}
                   >
                     <span className={styles.avatar}>
-                      <Jersey color={player.uniform} number={player.jerseyNumber} />
+                      <PlayerPhoto player={player} fallback={<Jersey color={player.uniform} number={player.jerseyNumber} />} />
                     </span>
                     <span className={styles.playerName}>{shortName(player.name)}</span>
                     <span className={styles.playerCount} aria-hidden="true">

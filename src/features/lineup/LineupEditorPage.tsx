@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
 import { Jersey } from '@/components/brand/Jersey';
+import { PlayerPhoto } from '@/components/brand/PlayerPhoto';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
@@ -338,9 +339,13 @@ function Editor({ lineupId }: { lineupId: string | undefined }) {
                         const here = selection === 'libero' ? draft.liberoId === player.id : starterSlotOf(draft, player.id) === selection;
                         return (
                           <li key={player.id} className={styles.item}>
-                            <span className={styles.itemJersey}>
-                              <Jersey color={player.uniform} number={player.jerseyNumber} />
-                            </span>
+                            {player.photo ? (
+                              <PlayerPhoto player={player} variant="avatar" />
+                            ) : (
+                              <span className={styles.itemJersey}>
+                                <Jersey color={player.uniform} number={player.jerseyNumber} />
+                              </span>
+                            )}
                             <span className={styles.itemText}>
                               <strong>
                                 {shortName(player.name)} #{player.jerseyNumber}
@@ -404,9 +409,13 @@ function Editor({ lineupId }: { lineupId: string | undefined }) {
                     const locked = where !== null && !onBench;
                     return (
                       <li key={player.id} className={styles.item}>
-                        <span className={styles.itemJersey}>
-                          <Jersey color={player.uniform} number={player.jerseyNumber} />
-                        </span>
+                        {player.photo ? (
+                              <PlayerPhoto player={player} variant="avatar" />
+                            ) : (
+                              <span className={styles.itemJersey}>
+                                <Jersey color={player.uniform} number={player.jerseyNumber} />
+                              </span>
+                            )}
                         <span className={styles.itemText}>
                           <strong>
                             {shortName(player.name)} #{player.jerseyNumber}

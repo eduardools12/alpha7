@@ -31,6 +31,7 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Base | Estados de carregamento, vazio, erro e sucesso; dados de demonstração identificados | Feito |
 | Elenco | Cartas esportivas, busca por nome/número, filtro por posição e situação (na URL) | Feito |
 | Elenco | Cadastro e edição (nome, camisa única, posição principal/secundária, situação, uniforme, observações) com validação | Feito |
+| Elenco | Foto do atleta (escolher, recortar 4:5, substituir, remover), exibida em carta, perfil, escalação, seletor de treino, destaques e arte; só coach altera | Feito (0.6.0); nuvem: Storage privado com política por equipe |
 | Elenco | Perfil: atributos, evolução do Overall, histórico, análise técnica, "como o Overall foi calculado" | Feito |
 | Avaliação | 9 atributos de 1 a 99, nova avaliação datada sem sobrescrever as anteriores, prévia do Overall e da variação | Feito |
 | Avaliação | Overall por posição com pesos provisórios editáveis em Configurações | Feito |

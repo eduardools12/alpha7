@@ -398,6 +398,7 @@ export type Database = {
           id: string;
           jersey_number: number;
           name: string;
+          photo_path: string | null;
           primary_position: string;
           secondary_position: string | null;
           status: string;
@@ -412,6 +413,7 @@ export type Database = {
           id: string;
           jersey_number: number;
           name: string;
+          photo_path?: string | null;
           primary_position: string;
           secondary_position?: string | null;
           status?: string;
@@ -426,6 +428,7 @@ export type Database = {
           id?: string;
           jersey_number?: number;
           name?: string;
+          photo_path?: string | null;
           primary_position?: string;
           secondary_position?: string | null;
           status?: string;

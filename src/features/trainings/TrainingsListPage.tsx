@@ -81,12 +81,12 @@ export function TrainingsListPage() {
         </EmptyState>
       ) : (
         <ul className={styles.grid}>
-          {trainings.map((training) => {
+          {trainings.map((training, index) => {
             const counts = cascadeCounts(training.id, data.exercises, data.trainingEvents);
             const valid = validEvents(data.trainingEvents.filter((e) => e.trainingId === training.id)).length;
             const open = training.status === 'aberto';
             return (
-              <li key={training.id}>
+              <li key={training.id} className="enter" style={{ '--i': Math.min(index, 8) } as React.CSSProperties}>
                 <Card as="article" className={styles.card}>
                   <header className={styles.head}>
                     <h2 className={styles.title}>{training.name}</h2>

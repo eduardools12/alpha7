@@ -101,7 +101,34 @@ button:disabled {
   font-variant-numeric: tabular-nums;
 }
 
+/* Painéis <details> que abrem: o conteúdo entra com a mesma animação curta (só ao abrir). */
+details[open] > :not(summary) {
+  animation: a7-enter var(--dur-base) var(--ease-out) both;
+}
+
+/* Entrada suave de blocos (uma vez, ao abrir a tela): opacidade e 6px de deslocamento. Use `style={{ '--i': n }}` para escalonar. */
+@keyframes a7-enter {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.enter {
+  animation: a7-enter var(--dur-slow) var(--ease-out) both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .enter,
+  details[open] > :not(summary) {
+    animation: none;
+  }
+
   *,
   *::before,
   *::after {

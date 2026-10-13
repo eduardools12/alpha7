@@ -22,4 +22,7 @@ export function SampleBadge({ attempts }: { attempts: number }) {
   return <span className={`${styles.sample} ${styles.ok}`}>{attempts} tentativas</span>;
 }
 
+/** Contexto para a dica do gráfico: "2 de 4" (vazio sem tentativas). */
+export const ratioDetail = (r: Ratio): string => (r.attempts === 0 ? '' : formatRatioContext(r));
+
 export const dayMonth = (isoDate: string): string => `${isoDate.slice(8, 10)}/${isoDate.slice(5, 7)}`;

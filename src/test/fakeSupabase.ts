@@ -214,6 +214,11 @@ export class FakeSupabase {
   /** Erro que o próximo método de autenticação deve devolver (uma vez). */
   authFailure: { message: string; status?: number; code?: string; name?: string } | null = null;
   rpcFailure: PgError | null = null;
+  /** Arquivos do Storage simulado: caminho → conteúdo. A regra imita a política do bucket (leitura: equipe; escrita: coach). */
+  files = new Map<string, { type: string; size: number }>();
+  storageCalls: { op: string; path: string }[] = [];
+  /** Erro que o próximo envio ao Storage deve devolver (uma vez). */
+  storageFailure: { message: string; statusCode?: string } | null = null;
   private listeners = new Set<AuthListener>();
   private idCounter = 0;
 
@@ -283,6 +288,44 @@ export class FakeSupabase {
     }
     return { data: null, error: pgError('PGRST202', `Could not find the function public.${name}`), status: 404 };
   }
+
+  /* ───────── storage (fotos) ───────── */
+  private photoTeam(path: string): string {
+    return path.split('/')[0] ?? '';
+  }
+  readonly storage = {
+    from: (bucket: string) => ({
+      upload: async (path: string, body: Blob, options?: { contentType?: string; upsert?: boolean }) => {
+        this.storageCalls.push({ op: 'upload', path });
+        if (this.offline) return { data: null, error: { message: 'Failed to fetch', statusCode: '0' } };
+        if (this.storageFailure) {
+          const error = this.storageFailure;
+          this.storageFailure = null;
+          return { data: null, error };
+        }
+        if (bucket !== 'player-photos') return { data: null, error: { message: 'Bucket not found', statusCode: '404' } };
+        if (this.role(this.photoTeam(path)) !== 'coach') return { data: null, error: { message: 'new row violates row-level security policy', statusCode: '403' } };
+        if (!['image/jpeg', 'image/png', 'image/webp'].includes(options?.contentType ?? '')) return { data: null, error: { message: 'mime type not supported', statusCode: '415' } };
+        if (body.size > 1_048_576) return { data: null, error: { message: 'The object exceeded the maximum allowed size', statusCode: '413' } };
+        if (this.files.has(path) && !options?.upsert) return { data: null, error: { message: 'The resource already exists', statusCode: '409' } };
+        this.files.set(path, { type: options?.contentType ?? '', size: body.size });
+        return { data: { path }, error: null };
+      },
+      createSignedUrl: async (path: string, _seconds: number) => {
+        this.storageCalls.push({ op: 'sign', path });
+        if (this.offline) return { data: null, error: { message: 'Failed to fetch', statusCode: '0' } };
+        if (this.role(this.photoTeam(path)) === null || !this.files.has(path)) return { data: null, error: { message: 'Object not found', statusCode: '404' } };
+        return { data: { signedUrl: `https://fake.storage.test/${path}?token=t` }, error: null };
+      },
+      remove: async (paths: string[]) => {
+        for (const path of paths) this.storageCalls.push({ op: 'remove', path });
+        // A RLS de exclusão esconde as linhas de quem não é coach: nada é apagado e não há erro (como no banco real).
+        const removable = paths.filter((path) => this.role(this.photoTeam(path)) === 'coach' && this.files.has(path));
+        for (const path of removable) this.files.delete(path);
+        return { data: removable.map((name) => ({ name })), error: null };
+      },
+    }),
+  };
 
   /* ───────── autenticação ───────── */
   readonly auth = {

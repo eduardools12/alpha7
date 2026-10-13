@@ -54,6 +54,7 @@
 }
 
 .sheet {
+  animation: a7-enter var(--dur-base) var(--ease-out) both;
   position: absolute;
   right: var(--s-3);
   bottom: calc(var(--bottom-nav-height) + var(--s-2) + env(safe-area-inset-bottom));

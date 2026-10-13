@@ -121,6 +121,11 @@
   height: 2.8rem;
 }
 
+/* Foto do atleta no seletor: círculo (a camisa continua quando não há foto). */
+.avatar img:not([width]) {
+  border-radius: 50%;
+}
+
 .playerName {
   max-width: 100%;
   overflow: hidden;

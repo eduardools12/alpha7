@@ -7,7 +7,7 @@ import { makeMatch, makePlayer } from '@/test/factories';
 import { renderApp } from '@/test/renderApp';
 import { renderRemote } from '@/test/renderRemote';
 import { TEAM_A, USERS, newFake, seedTeam, seedWorkspace } from '@/test/remoteFixtures';
-import { buildLineupArtSvg, svgToDataUrl } from './artSvg';
+import { artLayout, buildLineupArtSvg, svgToDataUrl } from './artSvg';
 
 const NOW = '2026-10-01T10:00:00.000Z';
 const NAMES = ['Ana Alves', 'Bia Borges', 'Cris Costa', 'Dani Dias', 'Eva Esteves', 'Fabi Faria', 'Gabi Gomes', 'Hele Hugo'];
@@ -84,6 +84,64 @@ describe('modelo e desenho da arte (puros)', () => {
     expect(gone.ok).toBe(false);
     expect(artFilename({ opponent: 'Sociedade Esportiva São João' }, 'story')).toBe('alpha7-escalacao-sociedade-esportiva-sao-joao-story.png');
     expect(artFilename({ opponent: '!!!' }, 'cartaz')).toBe('alpha7-escalacao-partida-cartaz.png');
+  });
+});
+
+describe('layout da arte: nada se sobrepõe', () => {
+  const model = (reserves: number, libero: boolean, format: 'cartaz' | 'story') => {
+    const many = Array.from({ length: reserves }, (_, i) => makePlayer({ id: `r${i}`, name: `Reserva ${i}`, jerseyNumber: 20 + i }));
+    const built = buildArtModel({
+      match,
+      lineup: { ...lineup, benchIds: many.map((p) => p.id), liberoId: libero ? 'p7' : null },
+      players: [...players, ...many],
+      format,
+      uniform: 'purple',
+    });
+    if (!built.ok) throw new Error(built.reason);
+    return built.model;
+  };
+
+  it.each([
+    [0, false],
+    [1, true],
+    [6, true],
+    [9, true],
+    [20, true],
+  ] as const)('com %i reservas (líbero: %s) o conteúdo termina antes do rodapé, nos dois formatos', (n, libero) => {
+    for (const format of ['cartaz', 'story'] as const) {
+      const L = artLayout(model(n, libero, format));
+      expect(L.contentBottom, `${format} conteúdo`).toBeLessThanOrEqual(L.footerBaseline - 30);
+      expect(L.benchTop, `${format} reservas abaixo da quadra`).toBeGreaterThan(L.courtTop + L.courtHeight);
+      // as duas fileiras ficam dentro da quadra e a linha de ataque passa ENTRE elas, sem cruzar nome nem disco
+      const [one, two] = L.rowY;
+      expect(one - L.discRadius).toBeGreaterThan(L.courtTop);
+      const nameBottomOne = one + L.discRadius + Math.round(80 * L.scale);
+      expect(L.attackLineY).toBeGreaterThan(nameBottomOne);
+      expect(L.attackLineY).toBeLessThan(two - L.discRadius);
+      expect(two + L.discRadius + Math.round(80 * L.scale)).toBeLessThan(L.courtTop + L.courtHeight);
+    }
+  });
+
+  it('reservas além da capacidade viram "+N" em vez de invadir o rodapé', () => {
+    const m = model(20, false, 'cartaz');
+    const svg = buildLineupArtSvg(m, assets);
+    expect(artLayout(m).reserveCapacity).toBe(9);
+    expect(svg).toContain('+11 RESERVAS');
+  });
+
+  it('com foto: a imagem do atleta é recortada em círculo com o número em um selo; sem foto, só o número', () => {
+    const photo = 'data:image/jpeg;base64,/9j/PHOTO';
+    const withPhoto = buildArtModel({ match, lineup, players, format: 'cartaz', uniform: 'purple', photos: { p1: photo } });
+    if (!withPhoto.ok) throw new Error(withPhoto.reason);
+    const svg = buildLineupArtSvg(withPhoto.model, assets);
+    expect(svg).toContain(`href="${photo}"`);
+    expect(svg.match(/clip-path="url\(#clip-/g)).toHaveLength(1); // só quem tem foto
+    expect(svg).toContain('preserveAspectRatio="xMidYMin slice"');
+    const plain = buildArtModel({ match, lineup, players, format: 'cartaz', uniform: 'purple' });
+    if (!plain.ok) throw new Error(plain.reason);
+    const without = buildLineupArtSvg(plain.model, assets);
+    expect(without).not.toContain('PHOTO');
+    expect(without).not.toContain('clip-path');
   });
 });
 

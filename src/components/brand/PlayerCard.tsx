@@ -4,6 +4,7 @@ import { shortName, PLAYER_STATUS_LABEL } from '@/domain/player';
 import { POSITION_LABEL } from '@/domain/positions';
 import type { PlayerCardData } from '@/data/selectors';
 import { Jersey } from './Jersey';
+import { PlayerPhoto } from './PlayerPhoto';
 import { OverallShield } from './OverallShield';
 import styles from './PlayerCard.module.css';
 
@@ -30,8 +31,15 @@ export function PlayerCard({ card, to }: PlayerCardProps) {
             <OverallShield overall={overall} />
           </span>
           <span className={`${styles.trait} ${trait ? '' : styles.noTrait}`}>{trait ?? 'Sem avaliação'}</span>
-          <span className={styles.jersey}>
-            <Jersey color={player.uniform} number={player.jerseyNumber} />
+          <span className={styles.photo}>
+            <PlayerPhoto
+              player={player}
+              fallback={
+                <span className={styles.jersey}>
+                  <Jersey color={player.uniform} number={player.jerseyNumber} />
+                </span>
+              }
+            />
           </span>
           {player.demo && <span className={styles.demo}>Demo</span>}
         </div>

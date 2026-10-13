@@ -130,6 +130,18 @@ export interface DataGateway {
   addRallyAction(input: ActionInput & { rallyId: string; recordedAt: string }): Promise<RallyAction>;
   /** Anula uma ação técnica. Idempotente. */
   voidRallyAction(actionId: string, voidedAt: string): Promise<void>;
+
+  /* ───────── fotos dos atletas ───────── */
+
+  /**
+   * Guarda a imagem (já recortada e reduzida) e devolve a referência que vai em `Player.photo`. Não altera o atleta:
+   * quem chama grava o atleta com a nova referência. Nuvem: arquivo no bucket privado, só a comissão técnica envia.
+   */
+  uploadPlayerPhoto(playerId: string, image: Blob): Promise<string>;
+  /** Apaga o arquivo de uma referência antiga (melhor esforço; no modo local não há arquivo separado). */
+  removePlayerPhoto(reference: string): Promise<void>;
+  /** Endereço utilizável num <img> para a referência (nuvem: URL assinada de curta duração). */
+  photoUrl(reference: string): Promise<string>;
 }
 
 /** Os dados salvos existem, mas não têm o formato esperado. */

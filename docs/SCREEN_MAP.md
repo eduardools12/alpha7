@@ -56,6 +56,8 @@ Menu lateral (≥ 960px) e barra inferior (< 960px; "Mais" abre Partidas, Estat�
 
 ## 03 · Perfil do atleta (`/elenco/:id`)
 
+**0.6.0:** cabeçalho com a foto 4:5 do atleta (ou a camisa), e, só para o coach, o cartão “Foto do atleta” (escolher, ver o recorte com zoom e posição, salvar, substituir, remover com confirmação); o formulário de edição tem o mesmo cartão. A carta do elenco mostra a mesma foto; no celular o elenco usa duas cartas por linha.
+
 **Objetivo:** ver e acompanhar um atleta.
 **Componentes:** herói (camisa, nome, número, posições, situação, Overall grande); Avaliação de atributos (9 barras em dois grupos); Evolução do Overall (gráfico a partir de 2 avaliações) com variação; Métricas reais de partidas e treinos (indisponíveis, "—"); Análise técnica (maiores e menores atributos); Como o Overall foi calculado (tabela nota × peso = pontos); Histórico de avaliações; Observações do treinador.
 **Ações:** Editar perfil, Registrar avaliação, Voltar ao elenco.

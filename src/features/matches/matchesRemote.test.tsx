@@ -153,3 +153,18 @@ describe('acompanhamento com o banco simulado', () => {
     expect(fake.rows('rallies', TEAM_A)).toHaveLength(0);
   });
 });
+
+describe('atalhos do dashboard por papel (cliente simulado)', () => {
+  it.each([
+    ['coach', true, true],
+    ['analyst', true, false],
+    ['viewer', false, false],
+  ] as const)('%s: nova partida = %s, gerar arte = %s', async (who, partida, arte) => {
+    const fake = seeded();
+    as(fake, who);
+    renderRemote(fake, { path: '/' });
+    await screen.findByText('Atalhos rápidos');
+    expect(!!screen.queryByRole('link', { name: 'Nova partida' })).toBe(partida);
+    expect(!!screen.queryByRole('link', { name: 'Gerar arte da escalação' })).toBe(arte);
+  });
+});

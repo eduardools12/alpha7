@@ -9,6 +9,7 @@ export interface ChartSeries {
 }
 
 /** Uma categoria do eixo X com um valor (ou null = sem dados) por série. */
+/** Valores por série; `<série>Detail` (opcional) traz o contexto exibido na dica (por exemplo, "2 de 4"). */
 export type ChartRow = { label: string } & Record<string, string | number | null>;
 
 export interface SeriesChartProps {
@@ -31,6 +32,38 @@ export interface SeriesChartProps {
 
 const AXIS = { fill: '#b6aec3', fontSize: 12 } as const;
 
+interface TipEntry {
+  dataKey?: string | number;
+  name?: string | number;
+  value?: unknown;
+  color?: string;
+  payload?: ChartRow;
+}
+
+/** Dica ao passar o mouse: título, uma linha por série com a cor, o valor e (se houver) o "x de y". Valor ausente = "Sem dados". */
+function Tip({ active, payload, label, unit }: { active?: boolean; payload?: readonly TipEntry[]; label?: string | number; unit: string }) {
+  if (!active || !payload || payload.length === 0) return null;
+  return (
+    <div className={styles.tip}>
+      <p className={styles.tipTitle}>{label}</p>
+      <ul>
+        {payload.map((entry) => {
+          const detail = entry.payload?.[`${String(entry.dataKey)}Detail`];
+          const empty = entry.value === null || entry.value === undefined;
+          return (
+            <li key={String(entry.dataKey)}>
+              <i style={{ background: entry.color }} aria-hidden="true" />
+              <span>{entry.name}</span>
+              <strong>{empty ? 'Sem dados' : `${String(entry.value)}${unit}`}</strong>
+              {!empty && typeof detail === 'string' && detail !== '' && <small>{detail}</small>}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 /**
  * Gráfico de linhas, barras ou barras empilhadas (Recharts, carregado sob demanda por SeriesChart). Valores null
  * viram lacunas (nunca zero); a tabela abaixo diz “Sem dados” nesses casos.
@@ -40,15 +73,7 @@ export function SeriesChartView({ kind, rows, series, ariaLabel, domain, unit = 
   const grid = <CartesianGrid stroke="rgba(255,255,255,0.07)" vertical={false} />;
   const x = <XAxis dataKey="label" tick={AXIS} axisLine={false} tickLine={false} interval="preserveStartEnd" />;
   const y = <YAxis domain={domain} tick={AXIS} axisLine={false} tickLine={false} width={48} tickCount={5} allowDecimals={false} tickFormatter={(v: number) => `${v}${unit}`} />;
-  const tooltip = (
-    <Tooltip
-      cursor={{ fill: 'rgba(255,255,255,0.05)', stroke: '#8f7aa6' }}
-      contentStyle={{ background: '#2b2734', border: '1px solid rgba(185,166,208,0.32)', borderRadius: 8 }}
-      labelStyle={{ color: '#f1eff4' }}
-      itemStyle={{ color: '#e4dcf0' }}
-      formatter={(value) => (value === null || value === undefined ? 'Sem dados' : `${value}${unit}`)}
-    />
-  );
+  const tooltip = <Tooltip cursor={{ fill: 'rgba(255,255,255,0.05)', stroke: '#8f7aa6' }} content={<Tip unit={unit} />} isAnimationActive={false} />;
   const legend = series.length > 1 ? <Legend wrapperStyle={{ color: '#e4dcf0', fontSize: 12 }} /> : null;
 
   return (

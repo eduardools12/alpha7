@@ -31,6 +31,22 @@
   }
 }
 
+/* Foto do atleta no cabeçalho: 4:5, a mesma proporção da carta e da arte. */
+.portrait {
+  width: 7.5rem;
+  aspect-ratio: 4 / 5;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-accent);
+  background: var(--a7-purple-900);
+}
+
+@media (min-width: 52rem) {
+  .portrait {
+    width: 9.5rem;
+  }
+}
+
 .identity {
   display: flex;
   flex-direction: column;

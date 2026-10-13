@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Can } from '@/auth/AccessContext';
 import { PATHS } from '@/app/routes';
 import { Button, ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -29,6 +30,7 @@ import { isPosition, POSITION_LABEL, POSITIONS } from '@/domain/positions';
 import { AttributeEditor, attributesToInputs, parseAttributeInputs, type AttributeInputErrors } from './AttributeEditor';
 import { EvaluationFields } from './EvaluationFields';
 import { OverallPreview } from './OverallPreview';
+import { PhotoEditor } from './PhotoEditor';
 import styles from './PlayerFormPage.module.css';
 
 export function PlayerFormPage() {
@@ -272,6 +274,14 @@ export function PlayerFormPage() {
               </>
             )}
           </Card>
+        )}
+
+        {editing && player && (
+          <Can to="players:write">
+            <Card title="Foto do atleta">
+              <PhotoEditor player={player} />
+            </Card>
+          </Can>
         )}
 
         <div className={styles.actions}>

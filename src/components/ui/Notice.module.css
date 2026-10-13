@@ -69,6 +69,28 @@
   color: var(--danger);
 }
 
+/* Faixa compacta: uma linha em telas largas, sem moldura pesada. */
+.compact {
+  align-items: center;
+  padding: var(--s-2) var(--s-3);
+  font-size: var(--fs-sm);
+}
+
+.compact .body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--s-2);
+}
+
+.compact .title {
+  font-weight: 650;
+}
+
+.compact .title + .text {
+  margin-top: 0;
+}
+
 @media (max-width: 36rem) {
   .notice {
     flex-wrap: wrap;

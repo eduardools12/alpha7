@@ -73,3 +73,48 @@
   color: var(--text-faint);
   font-size: var(--fs-xs);
 }
+
+/* Seletores com amostra visual: cor do uniforme e proporção do formato. */
+.swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.9rem;
+  margin-right: var(--s-2);
+  vertical-align: -0.1rem;
+  border-radius: 50%;
+  border: 1.5px solid var(--a7-lilac-100);
+}
+
+.swatchPurple {
+  background: var(--a7-purple-900);
+}
+
+.swatchWhite {
+  background: #fff;
+}
+
+.shape {
+  display: inline-block;
+  margin-right: var(--s-2);
+  vertical-align: -0.15rem;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+}
+
+.shapePoster {
+  width: 0.8rem;
+  height: 1rem;
+}
+
+.shapeStory {
+  width: 0.62rem;
+  height: 1.1rem;
+}
+
+/* Desktop: a prévia acompanha a rolagem enquanto se ajustam as escolhas. */
+@media (min-width: 64rem) {
+  .previewCol {
+    position: sticky;
+    top: var(--s-6);
+  }
+}

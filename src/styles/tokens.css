@@ -97,5 +97,15 @@
   --content-max: 80rem;
   --tap: 2.75rem; /* alvo de toque mínimo (44px) */
 
+  /* Movimento: curto e previsível. Só confirma ações e mostra estados; nunca atrasa o registro de pontos. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 220ms;
+  --dur-slow: 320ms;
+
+  /* Elevação discreta, só para o que reage ao ponteiro (cartas, cartões clicáveis, menus). */
+  --shadow-raise: 0 10px 24px rgb(0 0 0 / 0.35);
+  --line-accent: rgb(185 166 208 / 0.45);
+
   color-scheme: dark;
 }

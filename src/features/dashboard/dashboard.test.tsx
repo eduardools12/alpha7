@@ -114,3 +114,30 @@ describe('Dashboard com partidas reais', () => {
     expect(within(played).queryByText(/%/)).not.toBeInTheDocument();
   });
 });
+
+describe('Dashboard: partidas recentes e atalhos', () => {
+  it('lista as partidas iniciadas com o resultado e os pontinhos de V/D; agendadas não entram na lista recente', async () => {
+    const workspace = {
+      ...createEmptyWorkspace(),
+      players: [makePlayer({ id: 'x1', name: 'Ana Souza', jerseyNumber: 3 })],
+      matches: [
+        makeMatch({ id: 'a', opponent: 'Time A', status: 'concluida', finalSetsUs: 3, finalSetsThem: 1, concludedAt: '2026-10-02T10:00:00.000Z' }),
+        makeMatch({ id: 'b', opponent: 'Time B', status: 'concluida', finalSetsUs: 1, finalSetsThem: 3, concludedAt: '2026-10-03T10:00:00.000Z' }),
+        makeMatch({ id: 'c', opponent: 'Time C' }),
+      ],
+    };
+    renderApp({ workspace });
+    const card = (await screen.findByText('Partidas recentes')).closest('section') as HTMLElement;
+    expect(within(card).getByRole('link', { name: 'Time A' })).toBeInTheDocument();
+    expect(within(card).getByRole('link', { name: 'Time B' })).toBeInTheDocument();
+    expect(within(card).queryByRole('link', { name: 'Time C' })).not.toBeInTheDocument();
+    expect(within(card).getByText('3 x 1')).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Últimos resultados, do mais antigo ao mais recente: vitória, derrota' })).toBeInTheDocument();
+  });
+
+  it('os atalhos seguem as permissões: no modo local (sem papéis) aparecem partida, treino e arte', async () => {
+    renderApp({ workspace: { ...createEmptyWorkspace(), players: [makePlayer({ id: 'x1', name: 'Ana Souza', jerseyNumber: 3 })] } });
+    await screen.findByText('Atalhos rápidos');
+    for (const name of ['Nova partida', 'Novo treino', 'Gerar arte da escalação']) expect(screen.getByRole('link', { name })).toBeInTheDocument();
+  });
+});

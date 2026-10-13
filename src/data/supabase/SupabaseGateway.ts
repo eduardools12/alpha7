@@ -1,5 +1,6 @@
 import type { Lineup } from '@/domain/lineup';
 import type { Evaluation, Player } from '@/domain/player';
+import { photoPath } from '@/domain/photo';
 import type { ActionInput, Match, MatchSet, Rally, RallyAction, RallyInput, StartSetInput } from '@/domain/match';
 import type { Training, TrainingEvent, TrainingExercise } from '@/domain/training';
 import {
@@ -58,7 +59,7 @@ type Tables = Database['public']['Tables'];
 type TableName = keyof Tables;
 
 /** O que o gateway usa do cliente: só consultas e funções. A sessão de login é assunto do AuthProvider. */
-export type RemoteClient = Pick<AlphaSupabaseClient, 'from' | 'rpc'>;
+export type RemoteClient = Pick<AlphaSupabaseClient, 'from' | 'rpc' | 'storage'>;
 
 export interface SupabaseGatewayOptions {
   client: RemoteClient;
@@ -81,6 +82,23 @@ interface PgResult {
 
 const RALLY_KEYS = ['id', 'match_id', 'set_number', 'seq', 'serving_side', 'winner_side', 'rotation', 'server_player_id', 'reason', 'player_id', 'attempt_key', 'recorded_at', 'voided_at'] as const;
 const ACTION_KEYS = ['id', 'match_id', 'rally_id', 'player_id', 'fundamental', 'outcome', 'attempt_key', 'recorded_at', 'voided_at'] as const;
+
+const PHOTO_BUCKET = 'player-photos';
+const PHOTO_URL_SECONDS = 3600;
+
+/** Traduz um erro do Storage (a RLS do bucket decide quem escreve) para uma mensagem compreensível. */
+export function mapStorageError(error: { message?: string; statusCode?: string | number }): Error {
+  const message = error.message ?? '';
+  const status = String(error.statusCode ?? '');
+  if (/row-level security|unauthorized|not authorized|forbidden/i.test(message) || status === '403') {
+    return new PermissionDeniedError('Só a comissão técnica pode enviar, trocar ou remover fotos.');
+  }
+  if (/jwt expired/i.test(message) || status === '401') return new SessionExpiredError();
+  if (/exceeded|too large|payload|size/i.test(message) || status === '413') return new IntegrityError('A foto é grande demais para guardar. Escolha uma imagem menor.');
+  if (/mime|not supported|invalid/i.test(message)) return new IntegrityError('Formato de imagem não aceito. Use JPEG, PNG ou WebP.');
+  if (/failed to fetch|network|load failed/i.test(message)) return new RemoteUnavailableError();
+  return new RemoteDataError('falha ao enviar ou ler a foto');
+}
 
 /** O PostgREST devolve no máximo 1000 linhas por requisição: lemos em páginas. */
 const PAGE_SIZE = 1000;
@@ -531,6 +549,30 @@ export class SupabaseGateway implements DataGateway {
 
   async voidRallyAction(actionId: string, _voidedAt?: string): Promise<void> {
     await this.call('void_rally_action', { p_team: this.teamId, p_action: actionId });
+  }
+
+  /* ───────── fotos dos atletas (bucket privado `player-photos`) ───────── */
+
+  async uploadPlayerPhoto(playerId: string, image: Blob): Promise<string> {
+    const path = photoPath(this.teamId, playerId, Date.now());
+    const result = await guard(() => this.client.storage.from(PHOTO_BUCKET).upload(path, image, { contentType: image.type || 'image/jpeg', upsert: false }));
+    if (result.error) throw mapStorageError(result.error);
+    return path;
+  }
+
+  async removePlayerPhoto(reference: string): Promise<void> {
+    // Melhor esforço: o arquivo antigo órfão é só espaço ocupado; a referência do atleta já foi trocada.
+    try {
+      await this.client.storage.from(PHOTO_BUCKET).remove([reference]);
+    } catch {
+      /* sem conexão ou sem permissão: o arquivo fica, sem prejuízo */
+    }
+  }
+
+  async photoUrl(reference: string): Promise<string> {
+    const result = await guard(() => this.client.storage.from(PHOTO_BUCKET).createSignedUrl(reference, PHOTO_URL_SECONDS));
+    if (result.error || !result.data?.signedUrl) throw result.error ? mapStorageError(result.error) : new RemoteDataError('a foto não pôde ser lida');
+    return result.data.signedUrl;
   }
 
   /* ───────── recursos que só existem com dados locais ───────── */

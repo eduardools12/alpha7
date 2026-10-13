@@ -318,3 +318,11 @@
   gap: var(--s-3);
   margin-top: var(--s-3);
 }
+
+/* Faixa de rotação sob o placar: no celular a quadra fica abaixo da dobra, e a rotação não pode sumir. */
+.rotationLine {
+  margin: 0;
+  text-align: center;
+  color: var(--a7-lilac-100);
+  font-size: var(--fs-sm);
+}

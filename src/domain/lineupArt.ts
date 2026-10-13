@@ -21,6 +21,8 @@ export interface ArtPlayer {
   name: string;
   number: number;
   position: string;
+  /** Foto cadastrada do atleta, como data URL (a mesma do cadastro). Ausente = a arte mostra o número da camisa. */
+  photo?: string;
 }
 
 export interface ArtModel {
@@ -43,25 +45,28 @@ export interface ArtInput {
   players: readonly Player[];
   format: ArtFormatId;
   uniform: UniformColor;
+  /** Fotos já carregadas (atleta → data URL). Quem não está aqui aparece sem foto. */
+  photos?: Readonly<Record<string, string>>;
 }
 
 export type ArtResult = { ok: true; model: ArtModel } | { ok: false; reason: string };
 
-const asArtPlayer = (player: Player, position = player.primaryPosition): ArtPlayer => ({
+const asArtPlayer = (player: Player, position = player.primaryPosition, photo?: string): ArtPlayer => ({
   name: shortName(player.name),
   number: player.jerseyNumber,
   position: POSITION_LABEL[position],
+  ...(photo ? { photo } : {}),
 });
 
 /** Monta o modelo da arte. Recusa escalação incompleta ou com atleta que saiu do elenco (arte com buraco enganaria). */
-export function buildArtModel({ match, lineup, players, format, uniform }: ArtInput): ArtResult {
+export function buildArtModel({ match, lineup, players, format, uniform, photos = {} }: ArtInput): ArtResult {
   const byId = new Map(players.map((p) => [p.id, p]));
   const starters: ArtPlayer[] = [];
   for (const [index, starter] of lineup.starters.entries()) {
     if (!starter) return { ok: false, reason: `A escalação “${lineup.title}” não tem os seis titulares: falta a posição P${index + 1}.` };
     const player = byId.get(starter.playerId);
     if (!player) return { ok: false, reason: 'A escalação tem um atleta que não está mais no elenco.' };
-    starters.push(asArtPlayer(player, starter.role));
+    starters.push(asArtPlayer(player, starter.role, photos[player.id]));
   }
   const libero = lineup.liberoId ? byId.get(lineup.liberoId) : undefined;
   const reserves = lineup.benchIds.flatMap((id) => {
@@ -79,7 +84,7 @@ export function buildArtModel({ match, lineup, players, format, uniform }: ArtIn
       dateText: match.scheduledAt ? formatDateTime(match.scheduledAt) : 'Data a definir',
       venue: match.venue,
       starters,
-      libero: libero ? asArtPlayer(libero, 'libero') : null,
+      libero: libero ? asArtPlayer(libero, 'libero', photos[libero.id]) : null,
       reserves,
     },
   };

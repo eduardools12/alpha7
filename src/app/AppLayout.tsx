@@ -24,10 +24,12 @@ function BackupReminder() {
   const stale = status.changedSinceBackup && (status.daysSinceBackup ?? 0) >= REMINDER_DAYS;
   if (!never && !stale) return null;
   return (
-    <Notice tone="info" title="Faça um backup dos dados da equipe">
-      {never
-        ? 'Os dados cadastrados ficam só neste navegador e ainda não há nenhum backup. '
-        : `O último backup foi há ${status.daysSinceBackup} dias e houve alterações desde então. `}
+    <Notice compact tone="info" title="Faça um backup dos dados da equipe">
+      <span className={styles.long}>
+        {never
+          ? 'Os dados cadastrados ficam só neste navegador e ainda não há nenhum backup. '
+          : `O último backup foi há ${status.daysSinceBackup} dias e houve alterações desde então. `}
+      </span>
       <Link to={`${PATHS.settings}#backup`}>Exportar backup</Link>
     </Notice>
   );
@@ -46,7 +48,7 @@ function DemoBanner() {
   return (
     <div className={styles.banners}>
       {hasDemo && (
-        <Notice tone={mixed ? 'warning' : 'info'} title={mixed ? 'Demonstração misturada com dados da equipe' : 'Dados de demonstração'}>
+        <Notice compact tone={mixed ? 'warning' : 'info'} title={mixed ? 'Demonstração misturada com dados da equipe' : 'Dados de demonstração'}>
           <span className={styles.long}>
             {mixed
               ? 'Este workspace tem registros fictícios (marcados como “Demo”) junto com registros criados pela equipe, e os totais e médias somam os dois. '
@@ -56,20 +58,20 @@ function DemoBanner() {
         </Notice>
       )}
       {ready && integrityProblems > 0 && (
-        <Notice tone="warning" title="Os dados salvos têm inconsistências">
+        <Notice compact tone="warning" title="Os dados salvos têm inconsistências">
           A verificação encontrou {integrityProblems} {integrityProblems === 1 ? 'problema' : 'problemas'} (por exemplo, vínculos
           quebrados entre registros). Nada foi alterado.{' '}
           <Link to={`${PATHS.settings}#dados`}>Verificar integridade</Link>
         </Notice>
       )}
       {ready && access.readOnly && (
-        <Notice tone="info" title="Acesso somente leitura">
+        <Notice compact tone="info" title="Acesso somente leitura">
           Seu papel permite consultar os dados da equipe, mas não alterá-los. Os botões de edição ficam desativados ou ocultos.
         </Notice>
       )}
       {ready && backend === 'local' && <BackupReminder />}
       {!persistent && backend === 'local' && (
-        <Notice tone="warning" title="Armazenamento do navegador indisponível">
+        <Notice compact tone="warning" title="Armazenamento do navegador indisponível">
           As alterações valem só até recarregar a página. Exporte um backup antes de fechar.
         </Notice>
       )}

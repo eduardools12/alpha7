@@ -164,8 +164,8 @@ export function RosterPage() {
             </EmptyState>
           ) : (
             <ul className={styles.grid}>
-              {cards.map((card) => (
-                <li key={card.player.id}>
+              {cards.map((card, index) => (
+                <li key={card.player.id} className="enter" style={{ '--i': Math.min(index, 12) } as React.CSSProperties}>
                   <PlayerCard card={card} to={PATHS.player(card.player.id)} />
                 </li>
               ))}

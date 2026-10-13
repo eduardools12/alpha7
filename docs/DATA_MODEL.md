@@ -251,3 +251,10 @@ create table rally_events (
 - `matches_fk_indexes` (`20261013134700`) acrescenta dois índices apontados pelo advisor.
 
 **Backup/importação:** as quatro coleções entram no corpo do backup **só quando existe alguma partida** (assim dados e backups anteriores mantêm o mesmo checksum e a mesma impressão digital) e são validadas estritamente: ids, vínculos, sets em sequência, numeração de pontos, saque/rotação/sacador conferidos pelas regras, nenhum ponto depois do set fechado, resultado final igual ao dos sets, chaves de tentativa sem repetição.
+
+## Fotos dos atletas (0.6.0)
+
+- **Banco** (migração `20261013191918_player_photos.sql`, aditiva): `players.photo_path` (texto opcional, deve começar por `{team_id}/`), bucket **privado** `player-photos` (1 MB, só JPEG/PNG/WebP) e políticas em `storage.objects` pela função `private.photo_team`: membros da equipe leem; só `coach` envia, troca e remove, e só na pasta da própria equipe. Arquivos em `{team_id}/{player_id}-{versão}.jpg` (a versão muda a cada envio).
+- **No app:** `Player.photo?` guarda a referência: caminho do bucket (nuvem) ou data URL reduzida (modo local; teto de ~300 KB). É a única referência: carta, perfil, escalação e arte usam sempre a mesma. Fotos aparecem por URL assinada de 1 h (cache de ~50 min); a arte baixa a mesma foto como data URL para desenhar.
+- **Recorte:** sempre 4:5, versão final 640 x 800 em JPEG (qualidade 0,86), calculada em `domain/photo.ts` e desenhada em canvas.
+- **Backup (modo local):** a foto vai no campo `photo` do atleta (só aparece quando existe, para manter checksums anteriores). A importação aceita só data URL de imagem ou caminho da equipe.

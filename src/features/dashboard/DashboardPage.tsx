@@ -1,16 +1,18 @@
-import { Can } from '@/auth/AccessContext';
+import { Can, useCan } from '@/auth/AccessContext';
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
+import { PlayerPhoto } from '@/components/brand/PlayerPhoto';
 import { TrendChart } from '@/components/charts/TrendChart';
 import { DemoTag } from '@/components/ui/Badge';
 import { ButtonLink } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { ResultDots, Sparkline, StatTile } from '@/components/ui/StatTile';
 import { useWorkspace } from '@/data/WorkspaceProvider';
 import { formatDate, formatDateTime, formatSigned, monthShort } from '@/domain/format';
-import { MATCH_STATUS_LABEL, matchRecord, upcomingMatch } from '@/domain/match';
+import { MATCH_STATUS_LABEL, matchRecord, outcomeOf, resultText, upcomingMatch, type Match } from '@/domain/match';
 import { biggestRisers, playerStandings, teamOverallSeries, topByOverall } from '@/domain/insights';
 import { average, formatPercent, formatRatioContext, ratio, UNAVAILABLE } from '@/domain/metrics';
 import { shortName } from '@/domain/player';
@@ -18,30 +20,11 @@ import { POSITION_LABEL } from '@/domain/positions';
 import { validEvents } from '@/domain/training';
 import styles from './DashboardPage.module.css';
 
-function Tile({
-  label,
-  value,
-  detail,
-  demo = false,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-  demo?: boolean;
-}) {
-  return (
-    <div className={styles.tile}>
-      <p className={styles.tileLabel}>
-        {label} {demo && <DemoTag />}
-      </p>
-      <p className={`${styles.tileValue} tabular`}>{value}</p>
-      <p className={styles.tileDetail}>{detail}</p>
-    </div>
-  );
-}
+const matchSortKey = (m: Match) => m.concludedAt ?? (m.scheduledAt || m.createdAt);
 
 export function DashboardPage() {
   const { data } = useWorkspace();
+  const canWriteMatches = useCan('matches:write');
   const { players, evaluations, settings, activity: demoActivity, trainings, exercises, trainingEvents, matches } = data;
   // Com partidas reais, o dashboard usa SÓ elas; o resumo de demonstração só aparece enquanto não houver nenhuma.
   const realMatches = matches.length > 0;
@@ -72,7 +55,7 @@ export function DashboardPage() {
             </ButtonLink></Can>
           }
         >
-          O dashboard mostra o elenco, a evolução das avaliações e, no futuro, treinos e partidas. Comece cadastrando os
+          O dashboard mostra o elenco, a evolução das avaliações, treinos e partidas. Comece cadastrando os
           atletas, ou restaure os dados de demonstração em Configurações.
         </EmptyState>
       </>
@@ -83,6 +66,15 @@ export function DashboardPage() {
   const record = realMatches ? matchRecord(matches) : activity ? activity.matches : null;
   const win = record ? ratio(record.wins, record.played) : null;
   const next = upcomingMatch(matches);
+  const recent = [...matches].filter((m) => m.status !== 'agendada').sort((a, b) => matchSortKey(b).localeCompare(matchSortKey(a))).slice(0, 5);
+  const lastResults = [...matches]
+    .filter((m) => m.status === 'concluida')
+    .sort((a, b) => matchSortKey(a).localeCompare(matchSortKey(b)))
+    .slice(-5)
+    .flatMap((m) => {
+      const outcome = outcomeOf(m);
+      return outcome ? [outcome] : [];
+    });
   const concluded = trainings.filter((t) => t.status === 'concluido');
   const ongoing = trainings.length - concluded.length;
   const allTrainingsDemo = trainings.length > 0 && trainings.every((t) => t.demo);
@@ -96,13 +88,15 @@ export function DashboardPage() {
     <>
       <PageHeader title="Alpha7 Performance" subtitle="Dashboard principal" />
 
-      <section className={styles.tiles} aria-label="Indicadores">
-        <Tile
+      <section className={`${styles.tiles} enter`} aria-label="Indicadores">
+        <StatTile
+          icon="users"
           label="Atletas cadastrados"
           value={String(players.length)}
           detail={`${byStatus('ativo')} ativos · ${byStatus('lesionado')} lesionados · ${byStatus('transicao')} em transição`}
         />
-        <Tile
+        <StatTile
+          icon="chart"
           label="Overall médio do elenco"
           value={meanOverall === null ? UNAVAILABLE : String(Math.round(meanOverall))}
           detail={
@@ -110,8 +104,10 @@ export function DashboardPage() {
               ? 'Nenhum atleta avaliado ainda'
               : `Média de ${standings.length} de ${players.length} atletas avaliados`
           }
+          visual={<Sparkline values={series.map((p) => p.value)} label={`Evolução do Overall médio nos últimos ${series.length} meses com avaliação`} />}
         />
-        <Tile
+        <StatTile
+          icon="list"
           label="Treinos concluídos"
           value={String(concluded.length)}
           detail={
@@ -121,7 +117,8 @@ export function DashboardPage() {
           }
           demo={allTrainingsDemo}
         />
-        <Tile
+        <StatTile
+          icon="ball"
           label="Partidas disputadas"
           value={record ? String(record.played) : UNAVAILABLE}
           detail={
@@ -132,19 +129,28 @@ export function DashboardPage() {
                 : 'Sem partidas registradas'
           }
           demo={activity !== null}
+          visual={<ResultDots results={lastResults} />}
         />
       </section>
 
-      <div className={styles.row}>
+      <div className={`${styles.row} enter`} style={{ '--i': 1 } as React.CSSProperties}>
         <Card title="Próxima partida" titleAside={!next && activity?.nextMatch ? <DemoTag /> : undefined}>
           {next ? (
             <>
+              <span className={`${styles.status} ${next.status === 'em_andamento' ? styles.live : ''}`}>{MATCH_STATUS_LABEL[next.status]}</span>
               <p className={styles.versus}>Alpha7 vs. {next.opponent}</p>
               <p className={styles.muted}>
                 {[next.scheduledAt ? formatDateTime(next.scheduledAt) : 'Sem data definida', next.venue].filter(Boolean).join(' · ')}
               </p>
               <p className={styles.muted}>{[MATCH_STATUS_LABEL[next.status], next.competition].filter(Boolean).join(' · ')}</p>
-              <ButtonLink to={PATHS.match(next.id)}>Ver partida</ButtonLink>
+              <div className={styles.actionsRow}>
+                {canWriteMatches && (
+                  <ButtonLink to={PATHS.liveMatch(next.id)} variant="primary" icon="plus">
+                    {next.status === 'agendada' ? 'Iniciar partida' : 'Acompanhar'}
+                  </ButtonLink>
+                )}
+                <ButtonLink to={PATHS.match(next.id)}>Ver partida</ButtonLink>
+              </div>
             </>
           ) : activity?.nextMatch ? (
             <>
@@ -156,8 +162,39 @@ export function DashboardPage() {
               <ButtonLink to={PATHS.lineups}>Ver escalações</ButtonLink>
             </>
           ) : (
-            <p className={styles.muted}>Nenhuma partida agendada.</p>
+            <>
+              <p className={styles.muted}>Nenhuma partida agendada.</p>
+              <Can to="matches:write">
+                <ButtonLink to={PATHS.newMatch} icon="plus">
+                  Cadastrar partida
+                </ButtonLink>
+              </Can>
+            </>
           )}
+        </Card>
+
+        <Card title="Partidas recentes">
+          {recent.length === 0 ? (
+            <p className={styles.muted}>{realMatches ? 'Nenhuma partida iniciada ainda.' : 'As partidas registradas aparecem aqui, com o resultado de cada uma.'}</p>
+          ) : (
+            <ol className={styles.recent}>
+              {recent.map((m) => {
+                const outcome = outcomeOf(m);
+                return (
+                  <li key={m.id}>
+                    <span className={`${styles.badge} ${outcome ? styles[outcome] : styles.openBadge}`}>
+                      {outcome === 'vitoria' ? 'V' : outcome === 'derrota' ? 'D' : outcome === 'empate' ? 'E' : '…'}
+                    </span>
+                    <Link to={PATHS.match(m.id)} className={styles.recentName}>
+                      {m.opponent}
+                    </Link>
+                    <span className={`${styles.score} tabular`}>{resultText(m) ?? MATCH_STATUS_LABEL[m.status]}</span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+          <p className={styles.caption}>Resultado em sets, das partidas cadastradas pela equipe.</p>
         </Card>
 
         <Card title="Resumo do último treino" titleAside={lastTraining?.demo ? <DemoTag /> : undefined}>
@@ -199,7 +236,9 @@ export function DashboardPage() {
             </>
           )}
         </Card>
+      </div>
 
+      <div className={`${styles.row2} enter`} style={{ '--i': 2 } as React.CSSProperties}>
         <Card title="Evolução da equipe">
           {series.length >= 2 ? (
             <>
@@ -207,7 +246,7 @@ export function DashboardPage() {
                 data={series.map((p) => ({ label: monthShort(p.month), value: p.value, detail: `${p.sampleSize} atletas` }))}
                 ariaLabel="Overall médio do elenco por mês"
                 valueLabel="Overall médio"
-                height={170}
+                height={200}
               />
               <p className={styles.caption}>Overall médio dos atletas avaliados, mês a mês.</p>
             </>
@@ -217,61 +256,76 @@ export function DashboardPage() {
             </p>
           )}
         </Card>
-      </div>
-
-      <div className={styles.row2}>
-        <Card title="Destaques individuais">
-          {standings.length === 0 ? (
-            <p className={styles.muted}>Os destaques aparecem depois da primeira avaliação técnica.</p>
-          ) : (
-            <div className={styles.highlights}>
-              <div>
-                <h3 className={styles.subtitle}>Maiores Overalls</h3>
-                <ol className={styles.rank}>
-                  {top.map((s) => (
-                    <li key={s.player.id}>
-                      <Link to={PATHS.player(s.player.id)}>{shortName(s.player.name)}</Link>
-                      <span className={styles.muted}>{POSITION_LABEL[s.player.primaryPosition]}</span>
-                      <strong className={`${styles.score} tabular`}>{s.overall}</strong>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-              <div>
-                <h3 className={styles.subtitle}>Maior evolução desde a avaliação anterior</h3>
-                {risers.length === 0 ? (
-                  <p className={styles.muted}>Nenhuma melhora registrada entre as duas últimas avaliações.</p>
-                ) : (
-                  <ol className={styles.rank}>
-                    {risers.map((s) => (
-                      <li key={s.player.id}>
-                        <Link to={PATHS.player(s.player.id)}>{shortName(s.player.name)}</Link>
-                        <span className={styles.muted}>Overall {s.overall}</span>
-                        <strong className={`${styles.gain} tabular`}>{formatSigned(s.delta ?? 0)}</strong>
-                      </li>
-                    ))}
-                  </ol>
-                )}
-              </div>
-            </div>
-          )}
-          <p className={styles.caption}>Baseados nas notas do treinador, não em estatísticas de jogo.</p>
-        </Card>
 
         <Card title="Atalhos rápidos">
           <div className={styles.shortcuts}>
+            <Can to="matches:write">
+              <ButtonLink to={PATHS.newMatch} icon="ball">
+                Nova partida
+              </ButtonLink>
+            </Can>
+            <Can to="trainings:write">
+              <ButtonLink to={PATHS.newTraining} icon="list">
+                Novo treino
+              </ButtonLink>
+            </Can>
             <Can to="players:write"><ButtonLink to={PATHS.newPlayer} icon="plus">
               Adicionar jogador
             </ButtonLink></Can>
             <Can to="lineups:write"><ButtonLink to={PATHS.newLineup} icon="lineup">
               Montar escalação
             </ButtonLink></Can>
+            <Can to="arts:generate">
+              <ButtonLink to={PATHS.arts} icon="court">
+                Gerar arte da escalação
+              </ButtonLink>
+            </Can>
             <ButtonLink to={PATHS.roster} icon="users">
               Ver elenco
             </ButtonLink>
           </div>
         </Card>
       </div>
+
+      <Card title="Destaques individuais">
+        {standings.length === 0 ? (
+          <p className={styles.muted}>Os destaques aparecem depois da primeira avaliação técnica.</p>
+        ) : (
+          <div className={styles.highlights}>
+            <div>
+              <h3 className={styles.subtitle}>Maiores Overalls</h3>
+              <ol className={styles.rank}>
+                {top.map((s) => (
+                  <li key={s.player.id}>
+                    <PlayerPhoto player={s.player} variant="avatar" />
+                    <Link to={PATHS.player(s.player.id)}>{shortName(s.player.name)}</Link>
+                    <span className={styles.muted}>{POSITION_LABEL[s.player.primaryPosition]}</span>
+                    <strong className={`${styles.score} tabular`}>{s.overall}</strong>
+                  </li>
+                ))}
+              </ol>
+            </div>
+            <div>
+              <h3 className={styles.subtitle}>Maior evolução desde a avaliação anterior</h3>
+              {risers.length === 0 ? (
+                <p className={styles.muted}>Nenhuma melhora registrada entre as duas últimas avaliações.</p>
+              ) : (
+                <ol className={styles.rank}>
+                  {risers.map((s) => (
+                    <li key={s.player.id}>
+                      <PlayerPhoto player={s.player} variant="avatar" />
+                      <Link to={PATHS.player(s.player.id)}>{shortName(s.player.name)}</Link>
+                      <span className={styles.muted}>Overall {s.overall}</span>
+                      <strong className={`${styles.gain} tabular`}>{formatSigned(s.delta ?? 0)}</strong>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </div>
+          </div>
+        )}
+        <p className={styles.caption}>Baseados nas notas do treinador, não em estatísticas de jogo.</p>
+      </Card>
     </>
   );
 }

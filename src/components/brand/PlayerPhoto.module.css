@@ -1,0 +1,35 @@
+.portrait {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Rostos ficam na parte de cima do enquadramento: ancora o corte no alto. */
+  object-position: 50% 18%;
+}
+
+.avatar {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  width: var(--avatar-size, 2.25rem);
+  height: var(--avatar-size, 2.25rem);
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--surface-purple-2);
+  border: 1px solid var(--line-accent);
+}
+
+.avatarImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: 50% 18%;
+}
+
+.avatarFallback {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--a7-lilac-100);
+}

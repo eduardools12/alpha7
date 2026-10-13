@@ -6,7 +6,9 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SelectField, TextField } from '@/components/ui/Field';
 import { Notice } from '@/components/ui/Notice';
+import type { IconName } from '@/components/ui/Icon';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { StatTile } from '@/components/ui/StatTile';
 import { useWorkspace } from '@/data/WorkspaceProvider';
 import { FUNDAMENTALS, FUNDAMENTAL_LABEL, isFundamental, type Fundamental } from '@/domain/fundamentals';
 import { formatDate } from '@/domain/format';
@@ -38,7 +40,7 @@ import {
 import { MIN_SAMPLE, formatScore, receptionStats, type PlayerStatEvent, type StatEvent } from '@/domain/trainingStats';
 import { DistributionBars } from '@/features/trainings/DistributionBars';
 import { viewFundamental } from '@/features/trainings/fundamentalView';
-import { SampleBadge, chartPct, dayMonth, pctWithContext } from './statsView';
+import { SampleBadge, chartPct, dayMonth, pctWithContext, ratioDetail } from './statsView';
 import styles from './StatsPage.module.css';
 
 const COLORS = { training: '#b9a6d0', match: '#46c783', good: '#46c783', ok: '#8a94ee', warn: '#f3b94d', bad: '#f57b7b', lilac: '#d3c4f5' } as const;
@@ -224,7 +226,7 @@ export function StatsPage() {
 
           <RallySection scoped={scoped} />
 
-          <section aria-labelledby="fundamentos-titulo" className={styles.section}>
+          <section aria-labelledby="fundamentos-titulo" className={`${styles.section} enter`}>
             <h2 id="fundamentos-titulo" className={styles.h2}>
               Fundamentos observados: treinos e partidas
             </h2>
@@ -289,18 +291,18 @@ function RallySection({ scoped }: { scoped: ReturnType<typeof scope> }) {
     );
   }
 
-  const rotationRows: ChartRow[] = rotations.map((r) => ({ label: r.label, sideOut: chartPct(r.sideOut), breakPoint: chartPct(r.breakPoint) }));
-  const evolutionRows: ChartRow[] = evolution.map((p) => ({ label: `${dayMonth(p.date)} ${p.label}`, sideOut: chartPct(p.sideOut), breakPoint: chartPct(p.breakPoint), points: chartPct(p.points) }));
+  const rotationRows: ChartRow[] = rotations.map((r) => ({ label: r.label, sideOut: chartPct(r.sideOut), sideOutDetail: ratioDetail(r.sideOut), breakPoint: chartPct(r.breakPoint), breakPointDetail: ratioDetail(r.breakPoint) }));
+  const evolutionRows: ChartRow[] = evolution.map((p) => ({ label: `${dayMonth(p.date)} ${p.label}`, sideOut: chartPct(p.sideOut), sideOutDetail: ratioDetail(p.sideOut), breakPoint: chartPct(p.breakPoint), breakPointDetail: ratioDetail(p.breakPoint), points: chartPct(p.points), pointsDetail: ratioDetail(p.points) }));
 
   return (
-    <section aria-labelledby="pontos-titulo" className={styles.section}>
+    <section aria-labelledby="pontos-titulo" className={`${styles.section} enter`}>
       <h2 id="pontos-titulo" className={styles.h2}>
         Partidas: como os pontos saem
       </h2>
       <div className={styles.tiles}>
-        <Tile label="Pontos do Alpha7" ratio={indicators.points} formula="pontos do Alpha7 ÷ pontos jogados" />
-        <Tile label="Side-out" ratio={indicators.sideOut} formula="pontos ganhos com o adversário sacando ÷ pontos jogados com o adversário sacando" />
-        <Tile label="Ponto de saque (break point)" ratio={indicators.breakPoint} formula="pontos ganhos com o Alpha7 sacando ÷ pontos jogados com o Alpha7 sacando" />
+        <Tile icon="ball" label="Pontos do Alpha7" ratio={indicators.points} formula="pontos do Alpha7 ÷ pontos jogados" />
+        <Tile icon="swap" label="Side-out" ratio={indicators.sideOut} formula="pontos ganhos com o adversário sacando ÷ pontos jogados com o adversário sacando" />
+        <Tile icon="rotate" label="Ponto de saque (break point)" ratio={indicators.breakPoint} formula="pontos ganhos com o Alpha7 sacando ÷ pontos jogados com o Alpha7 sacando" />
       </div>
 
       <div className={styles.twoCols}>
@@ -386,15 +388,20 @@ function RotationNotes({ rows }: { rows: ReturnType<typeof byRotation> }) {
   );
 }
 
-function Tile({ label, ratio, formula }: { label: string; ratio: ReturnType<typeof rallyIndicators>['points']; formula: string }) {
+function Tile({ label, ratio, formula, icon }: { label: string; ratio: ReturnType<typeof rallyIndicators>['points']; formula: string; icon: IconName }) {
   return (
-    <div className={styles.tile}>
-      <p className={styles.tileLabel}>{label}</p>
-      <p className={`${styles.tileValue} tabular`}>{ratio.value === null ? '—' : formatPercent(ratio)}</p>
-      <p className={styles.tileDetail}>{ratio.attempts === 0 ? 'Sem dados' : `${ratio.successes} de ${ratio.attempts}`}</p>
-      <SampleBadge attempts={ratio.attempts} />
-      <p className={styles.formula}>{formula}</p>
-    </div>
+    <StatTile
+      icon={icon}
+      label={label}
+      value={ratio.value === null ? '—' : formatPercent(ratio)}
+      detail={ratio.attempts === 0 ? 'Sem dados' : `${ratio.successes} de ${ratio.attempts}`}
+      footer={
+        <>
+          <SampleBadge attempts={ratio.attempts} />
+          <p className={styles.formula}>{formula}</p>
+        </>
+      }
+    />
   );
 }
 
@@ -447,7 +454,7 @@ function ChartsSection(props: {
   const { scoped, fundamentals, evoFundamental } = props;
 
   const indicatorRows = fundamentals.map((f) => ({ f, training: chartIndicator(f, scoped.trainingEvents), match: chartIndicator(f, scoped.actions) }));
-  const comparisonRows: ChartRow[] = indicatorRows.map(({ f, training, match }) => ({ label: FUNDAMENTAL_LABEL[f], training: chartPct(training.ratio), match: chartPct(match.ratio) }));
+  const comparisonRows: ChartRow[] = indicatorRows.map(({ f, training, match }) => ({ label: FUNDAMENTAL_LABEL[f], training: chartPct(training.ratio), trainingDetail: `${training.label}: ${ratioDetail(training.ratio)}`, match: chartPct(match.ratio), matchDetail: `${match.label}: ${ratioDetail(match.ratio)}` }));
 
   const reception = {
     training: receptionStats(scoped.trainingEvents),
@@ -463,13 +470,16 @@ function ChartsSection(props: {
   const receptionRows: ChartRow[] = (['training', 'match'] as const).map((context) => ({
     label: context === 'training' ? 'Treinos' : 'Partidas',
     ...Object.fromEntries(receptionKeys.map(([key]) => [key, chartPct(reception[context].shares[key])])),
+    ...Object.fromEntries(receptionKeys.map(([key]) => [`${key}Detail`, reception[context].attempts === 0 ? '' : `${reception[context].counts[key]} de ${reception[context].attempts}`])),
   }));
 
   const evolution = indicatorEvolution(scoped, evoFundamental);
   const evolutionRows: ChartRow[] = evolution.map((p) => ({
     label: `${dayMonth(p.date)} ${p.label}`,
     training: p.source === 'treino' ? chartPct(p.ratio) : null,
+    trainingDetail: p.source === 'treino' ? ratioDetail(p.ratio) : '',
     match: p.source === 'partida' ? chartPct(p.ratio) : null,
+    matchDetail: p.source === 'partida' ? ratioDetail(p.ratio) : '',
   }));
 
   const positionFundamental = fundamentals.length === 1 ? (fundamentals[0] ?? 'recepcao') : evoFundamental;

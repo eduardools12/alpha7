@@ -16,6 +16,7 @@ import {
   RALLY_REASONS,
   courtPositions,
   nextContext,
+  setterPosition,
   planConclude,
   reasonLabel,
   reasonProblem,
@@ -247,6 +248,15 @@ export function MatchLivePage() {
             {context?.servingSide === 'them' && <span className={styles.ball}>Saque</span>}
           </div>
         </div>
+        {current && context && open && (
+          <p className={styles.rotationLine}>
+            <strong>Rotação {(context.rotation % 6) + 1}</strong>
+            {context.servingSide === 'us' && context.serverPlayerId && playersById.get(context.serverPlayerId)
+              ? ` · saca ${label(playersById.get(context.serverPlayerId) as Player)}`
+              : ' · adversário saca'}
+            {setterPosition(current.set, context.rotation) !== null && ` · levantador em P${setterPosition(current.set, context.rotation)}`}
+          </p>
+        )}
       </section>
 
       {current?.closed && (

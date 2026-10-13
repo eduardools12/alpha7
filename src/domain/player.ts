@@ -39,6 +39,11 @@ export interface Player {
   updatedAt: string;
   /** true = registro de demonstração, nunca confundir com dado real. */
   demo: boolean;
+  /**
+   * Foto do atleta (opcional; ausente = sem foto). Nuvem: caminho do arquivo no bucket privado; modo local: data URL
+   * reduzida. Sempre a MESMA referência em carta, perfil, escalação e arte. Não é avaliação nem altera o Overall.
+   */
+  photo?: string;
 }
 
 /** Avaliação técnica datada. O histórico é apenas acrescido, nunca sobrescrito. */

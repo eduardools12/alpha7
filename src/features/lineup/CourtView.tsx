@@ -1,4 +1,5 @@
 import { Jersey } from '@/components/brand/Jersey';
+import { PlayerPhoto } from '@/components/brand/PlayerPhoto';
 import { COURT_LAYOUT, type CourtSlot, type LineupStarter } from '@/domain/lineup';
 import { shortName, type Player } from '@/domain/player';
 import { POSITION_LABEL, type CourtRole } from '@/domain/positions';
@@ -49,9 +50,13 @@ function SlotButton({
       <span className={styles.zone}>{zone}</span>
       {player ? (
         <>
-          <span className={styles.jersey}>
-            <Jersey color={player.uniform} number={player.jerseyNumber} />
-          </span>
+          {player.photo ? (
+            <PlayerPhoto player={player} variant="avatar" className={styles.photo} />
+          ) : (
+            <span className={styles.jersey}>
+              <Jersey color={player.uniform} number={player.jerseyNumber} />
+            </span>
+          )}
           <span className={styles.name}>{shortName(player.name)}</span>
           <span className={styles.role}>{role}</span>
         </>

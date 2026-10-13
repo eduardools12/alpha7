@@ -13,3 +13,53 @@
   color: var(--text-faint);
   font-size: var(--fs-sm);
 }
+
+/* Dica dos gráficos de séries (SeriesChartView). */
+.tip {
+  min-width: 9rem;
+  padding: var(--s-2) var(--s-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font-size: var(--fs-sm);
+}
+
+.tipTitle {
+  margin-bottom: var(--s-1);
+  font-weight: 650;
+}
+
+.tip ul {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tip li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.tip i {
+  width: 0.65rem;
+  height: 0.65rem;
+  border-radius: 2px;
+}
+
+.tip li span {
+  flex: 1;
+  color: var(--text-muted);
+}
+
+.tip small {
+  flex-basis: 100%;
+  padding-left: calc(0.65rem + var(--s-2));
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}

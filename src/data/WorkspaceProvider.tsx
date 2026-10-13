@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Fundamental } from '@/domain/fundamentals';
 import { newId } from '@/domain/id';
+import { PHOTO_MAX_OUTPUT_BYTES, isDataUrl, validatePhotoFile } from '@/domain/photo';
 import { matchState, validateMatchDraft, type Match, type MatchDraft, type MatchSet, type Rally, type RallyAction, type RallyReason, type SetStarter, type Side } from '@/domain/match';
 import {
   applyTrainingDraft,
@@ -69,6 +70,15 @@ export interface WorkspaceActions {
   saveLineup(lineup: Lineup): Promise<Lineup>;
   deleteLineup(id: string): Promise<void>;
   saveWeights(weights: OverallWeights): Promise<void>;
+  /**
+   * Define (imagem) ou remove (null) a foto de um atleta. A imagem já deve vir recortada e reduzida. Só a comissão técnica.
+   * Troca a referência no atleta; o arquivo antigo é apagado só depois que o atleta foi salvo (nunca fica sem foto por falha no meio).
+   */
+  setPlayerPhoto(playerId: string, image: Blob | null): Promise<Player>;
+  /** Endereço para usar num <img> (nuvem: URL assinada, guardada por ~50 min). */
+  photoUrl(reference: string): Promise<string>;
+  /** A MESMA foto como data URL, para desenhar na arte (o canvas não pode misturar origens). */
+  photoDataUri(reference: string): Promise<string>;
   /**
    * Substitui TODO o workspace pela demonstração (mantém os pesos do Overall). A interface deve pedir
    * confirmação explícita antes: o conteúdo anterior vai para a cópia de segurança (desfazer).
@@ -243,6 +253,43 @@ async function guarded<T>(work: () => Promise<T>): Promise<T> {
     if (isUserFacing(error)) throw new DomainRuleError(error.message);
     throw new Error(SAVE_FAILED, { cause: error });
   }
+}
+
+/* ───────── fotos: URLs e data URIs em cache (a mesma foto não é baixada duas vezes) ───────── */
+
+const URL_TTL_MS = 50 * 60 * 1000;
+const urlCache = new Map<DataGateway, Map<string, { url: string; at: number }>>();
+const dataCache = new Map<string, Promise<string>>();
+
+async function resolvePhotoUrl(gw: DataGateway, reference: string): Promise<string> {
+  if (isDataUrl(reference)) return reference;
+  const own = urlCache.get(gw) ?? new Map<string, { url: string; at: number }>();
+  urlCache.set(gw, own);
+  const hit = own.get(reference);
+  if (hit && Date.now() - hit.at < URL_TTL_MS) return hit.url;
+  const url = await gw.photoUrl(reference);
+  own.set(reference, { url, at: Date.now() });
+  return url;
+}
+
+async function resolvePhotoDataUri(gw: DataGateway, reference: string): Promise<string> {
+  if (isDataUrl(reference)) return reference;
+  const cached = dataCache.get(reference);
+  if (cached) return cached;
+  const work = (async () => {
+    const response = await fetch(await resolvePhotoUrl(gw, reference));
+    if (!response.ok) throw new RemoteDataError('a foto não pôde ser baixada');
+    const blob = await response.blob();
+    return new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(typeof reader.result === 'string' ? reader.result : '');
+      reader.onerror = () => reject(new RemoteDataError('a foto não pôde ser lida'));
+      reader.readAsDataURL(blob);
+    });
+  })();
+  dataCache.set(reference, work);
+  work.catch(() => dataCache.delete(reference));
+  return work;
 }
 
 export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway; children: ReactNode }) {
@@ -449,6 +496,36 @@ export function WorkspaceProvider({ gateway, children }: { gateway?: DataGateway
           setData((prev) => ({ ...prev, lineups: prev.lineups.filter((l) => l.id !== id) }));
         });
       },
+
+      async setPlayerPhoto(playerId, image) {
+        return guarded(async () => {
+          allow('players:write');
+          const current = latest.current.players.find((p) => p.id === playerId);
+          if (!current) throw new DomainRuleError('Este atleta não existe mais no elenco.');
+          const previous = current.photo;
+          let reference: string | null = null;
+          if (image) {
+            const problem = validatePhotoFile({ type: image.type, size: image.size });
+            if (problem) throw new DomainRuleError(problem);
+            if (image.size > PHOTO_MAX_OUTPUT_BYTES) throw new DomainRuleError('A foto reduzida ainda ficou grande demais. Escolha outra imagem.');
+            reference = await gw.uploadPlayerPhoto(playerId, image);
+          }
+          const { photo: _old, ...rest } = current;
+          const next: Player = { ...rest, ...(reference ? { photo: reference } : {}), updatedAt: new Date().toISOString() };
+          try {
+            await gw.savePlayer(next);
+          } catch (failure) {
+            if (reference) await gw.removePlayerPhoto(reference); // o arquivo novo não ficou ligado a ninguém
+            throw failure;
+          }
+          setData((prev) => ({ ...prev, players: prev.players.map((p) => (p.id === playerId ? next : p)) }));
+          if (previous && previous !== reference) await gw.removePlayerPhoto(previous);
+          return next;
+        });
+      },
+
+      photoUrl: (reference) => resolvePhotoUrl(gw, reference),
+      photoDataUri: (reference) => resolvePhotoDataUri(gw, reference),
 
       async saveWeights(weights) {
         await guarded(async () => {

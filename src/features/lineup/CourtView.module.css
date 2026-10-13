@@ -130,3 +130,8 @@
 .liberoRow .slot {
   width: 100%;
 }
+
+/* Foto do atleta na zona da quadra: círculo no lugar da camisa, com o mesmo espaço. */
+.photo {
+  --avatar-size: 3.2rem;
+}

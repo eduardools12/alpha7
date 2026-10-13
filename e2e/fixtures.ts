@@ -24,6 +24,8 @@ export const test = base.extend({
     page.goto = async (url, options) => {
       const response = await goto(url, options);
       await passFirstUseChoice(page);
+      // A entrada suave dos blocos (0,3 s) mede errado o contraste e o layout se a medição começar no meio dela.
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
       return response;
     };
     await use(page);

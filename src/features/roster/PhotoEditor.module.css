@@ -1,0 +1,87 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.current,
+.crop {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-5);
+  align-items: flex-start;
+}
+
+/* Moldura 4:5: a mesma proporção da carta, do perfil e da arte. */
+.frame {
+  width: 9.6rem;
+  aspect-ratio: 4 / 5;
+  flex: none;
+  overflow: hidden;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+}
+
+.crop .frame {
+  width: min(15rem, 100%);
+}
+
+.canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.empty {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+
+.controls,
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.controls {
+  flex: 1 1 14rem;
+  min-width: 0;
+}
+
+.actions {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: var(--s-2);
+}
+
+.current .actions {
+  flex: 1 1 14rem;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.slider {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--a7-lilac-100);
+}
+
+.slider input {
+  width: 100%;
+  min-height: var(--tap);
+  accent-color: var(--a7-lilac-300);
+}
