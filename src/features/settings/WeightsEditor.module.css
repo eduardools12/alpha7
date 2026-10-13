@@ -1,0 +1,70 @@
+.editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+.positions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.table {
+  width: 100%;
+  max-width: 40rem;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--s-2);
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.table thead th {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.table tbody th {
+  font-weight: 500;
+}
+
+.table abbr {
+  margin-left: var(--s-1);
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+  text-decoration: none;
+}
+
+.input {
+  width: 5rem;
+  min-height: 2.5rem;
+  padding: 0 var(--s-2);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  text-align: right;
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.error {
+  margin-top: var(--s-1);
+  color: var(--danger);
+  font-size: var(--fs-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-3);
+  justify-content: flex-end;
+}

@@ -1,0 +1,55 @@
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-10) var(--s-5);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-md);
+  text-align: center;
+}
+
+.badge {
+  display: grid;
+  place-items: center;
+  width: 3.25rem;
+  height: 3.25rem;
+  border-radius: 50%;
+  background: var(--surface-purple);
+  color: var(--a7-lilac-300);
+}
+
+.title {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.text {
+  max-width: 34rem;
+  color: var(--text-muted);
+  text-wrap: pretty;
+}
+
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-3);
+  padding: var(--s-12) var(--s-5);
+  color: var(--text-muted);
+}
+
+.spinner {
+  width: 1.25rem;
+  height: 1.25rem;
+  border: 2px solid var(--line-strong);
+  border-top-color: var(--a7-lilac-300);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

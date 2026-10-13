@@ -1,0 +1,15 @@
+.figure {
+  margin: 0;
+}
+
+.chart {
+  width: 100%;
+  min-width: 0;
+}
+
+.placeholder {
+  display: grid;
+  place-items: center;
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}

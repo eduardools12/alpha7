@@ -1,0 +1,54 @@
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(20rem, 1fr));
+  gap: var(--s-4);
+}
+
+.card {
+  height: 100%;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+.meta {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--s-2);
+  padding: var(--s-3) 0;
+  border-block: 1px solid var(--line);
+}
+
+.facts dt {
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.facts dd {
+  margin: 0;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: auto;
+}

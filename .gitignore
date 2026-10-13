@@ -1,0 +1,14 @@
+node_modules
+dist
+coverage
+*.local
+.env
+.env.*
+!.env.example
+.vite
+*.tsbuildinfo
+.DS_Store
+.playwright-mcp
+test-results
+playwright-report
+.vitest-result.json

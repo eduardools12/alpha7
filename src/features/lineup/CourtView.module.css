@@ -1,0 +1,132 @@
+.wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s-4);
+}
+
+.court {
+  position: relative;
+  width: 100%;
+  max-width: 44rem;
+  aspect-ratio: 100 / 86;
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+}
+
+.floor {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.netLabel {
+  position: absolute;
+  top: 0.35rem;
+  left: 50%;
+  transform: translateX(-50%);
+  color: var(--a7-lilac-100);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.slots {
+  position: absolute;
+  inset: 11% 5% 3%;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
+  gap: 4%;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3%;
+}
+
+.slot {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  min-width: 0;
+  padding: var(--s-1);
+  background: rgb(23 20 29 / 0.82);
+  border: 2px solid rgb(228 220 240 / 0.45);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  backdrop-filter: blur(2px);
+  transition:
+    border-color 0.15s,
+    background-color 0.15s;
+}
+
+.slot:hover:not(:disabled) {
+  border-color: var(--a7-lilac-100);
+}
+
+.slot:disabled {
+  cursor: default;
+}
+
+.selected {
+  border-color: #fff;
+  background: rgb(58 22 112 / 0.95);
+  box-shadow: 0 0 0 3px var(--focus);
+}
+
+.empty {
+  border-style: dashed;
+  background: rgb(23 20 29 / 0.55);
+}
+
+.zone {
+  position: absolute;
+  top: 0.15rem;
+  left: 0.3rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--a7-lilac-300);
+}
+
+.jersey {
+  width: clamp(2.4rem, 8vw, 4.6rem);
+  height: clamp(2.4rem, 8vw, 4.6rem);
+}
+
+.name {
+  max-width: 100%;
+  overflow: hidden;
+  font-family: var(--font-display);
+  font-size: clamp(0.9rem, 2.6vw, 1.3rem);
+  font-weight: 700;
+  line-height: 1;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.role {
+  font-size: clamp(0.6rem, 2.2vw, 0.72rem);
+  color: var(--text-muted);
+}
+
+.vacant {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.liberoRow {
+  width: min(11rem, 40%);
+  min-width: 8.5rem;
+  aspect-ratio: 1.15 / 1;
+  display: flex;
+}
+
+.liberoRow .slot {
+  width: 100%;
+}

@@ -1,0 +1,9 @@
+.preview {
+  display: flex;
+  align-items: center;
+  gap: var(--s-4);
+  padding: var(--s-3) var(--s-4);
+  background: var(--surface-purple);
+  border-radius: var(--r-md);
+  color: var(--text-muted);
+}

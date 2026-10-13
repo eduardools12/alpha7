@@ -1,0 +1,237 @@
+.hero {
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--s-4);
+  align-items: center;
+  padding: var(--s-5);
+  overflow: hidden;
+  background: linear-gradient(115deg, var(--a7-purple-950) 0%, var(--a7-purple-800) 55%, var(--a7-purple-700) 100%);
+  border: 1px solid rgb(185 166 208 / 0.22);
+  border-radius: var(--r-lg);
+}
+
+@media (min-width: 52rem) {
+  .hero {
+    grid-template-columns: 9.5rem 1fr auto;
+    gap: var(--s-8);
+    padding: var(--s-6) var(--s-8);
+  }
+}
+
+.jersey {
+  width: 7.5rem;
+  height: 7.5rem;
+}
+
+@media (min-width: 52rem) {
+  .jersey {
+    width: 9.5rem;
+    height: 9.5rem;
+  }
+}
+
+.identity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+.name {
+  font-size: var(--fs-3xl);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.05;
+}
+
+@media (min-width: 52rem) {
+  .name {
+    font-size: var(--fs-4xl);
+  }
+}
+
+.sub {
+  color: var(--a7-lilac-100);
+  font-size: var(--fs-lg);
+}
+
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+/* Colunas em fluxo: cada cartão tem altura própria, sem buracos entre eles. */
+.grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+}
+
+@media (min-width: 64rem) {
+  .grid {
+    display: block;
+    columns: 3;
+    column-gap: var(--s-4);
+  }
+  .grid > * {
+    break-inside: avoid;
+    margin-bottom: var(--s-4);
+  }
+}
+
+.attrGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+}
+
+.attrGroup + .attrGroup {
+  margin-top: var(--s-3);
+}
+
+.groupTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.last {
+  color: var(--text-muted);
+}
+
+.last strong {
+  color: var(--ok);
+}
+
+.metrics {
+  display: flex;
+  flex-direction: column;
+}
+
+.metric {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s-3);
+  padding: var(--s-2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.metric dd {
+  margin: 0;
+  color: var(--text-faint);
+  font-weight: 700;
+}
+
+.cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--s-4);
+}
+
+.pills {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-2);
+  margin-top: var(--s-2);
+}
+
+.pills li {
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.strong {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.work {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-sm);
+}
+
+.table th,
+.table td {
+  padding: var(--s-2) var(--s-2);
+  border-bottom: 1px solid var(--line);
+  text-align: right;
+}
+
+.table th:first-child,
+.table tbody th {
+  text-align: left;
+  font-weight: 500;
+}
+
+.table thead th {
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+.table tfoot th {
+  text-align: left;
+}
+
+.history {
+  display: flex;
+  flex-direction: column;
+}
+
+.history li {
+  display: grid;
+  grid-template-columns: auto auto auto 1fr;
+  gap: var(--s-1) var(--s-3);
+  align-items: baseline;
+  padding: var(--s-3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.histDate {
+  color: var(--text-muted);
+}
+
+.histOverall {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+}
+
+.delta {
+  color: var(--text-faint);
+  font-size: var(--fs-sm);
+}
+
+.histBy {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-align: right;
+}
+
+.histNote {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+}
+
+.notes {
+  white-space: pre-wrap;
+  text-wrap: pretty;
+}

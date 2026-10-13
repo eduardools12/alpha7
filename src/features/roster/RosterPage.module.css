@@ -1,0 +1,86 @@
+.controls {
+  display: grid;
+  gap: var(--s-4);
+}
+
+@media (min-width: 52rem) {
+  .controls {
+    grid-template-columns: 1fr minmax(16rem, 22rem);
+    grid-template-areas:
+      'pos search'
+      'sit search';
+    align-items: start;
+  }
+  .search {
+    grid-area: search;
+  }
+}
+
+.search {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.searchLabel,
+.filterLabel {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  color: var(--a7-lilac-100);
+}
+
+.searchBox {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: var(--tap);
+  padding: 0 var(--s-3);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--text-faint);
+}
+
+.searchBox:focus-within {
+  border-color: var(--focus);
+}
+
+.searchBox input {
+  flex: 1;
+  min-width: 0;
+  min-height: 2.5rem;
+  background: transparent;
+  border: 0;
+  outline: none;
+  color: var(--text);
+}
+
+.searchBox input::placeholder {
+  color: var(--text-faint);
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.count {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11.75rem, 1fr));
+  gap: var(--s-5) var(--s-4);
+}

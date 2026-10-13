@@ -1,0 +1,27 @@
+.chip {
+  min-height: 2.5rem;
+  padding: 0 var(--s-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: var(--a7-lilac-100);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
+.chip:hover {
+  background: rgb(185 166 208 / 0.12);
+}
+
+.on {
+  background: var(--a7-lilac-300);
+  border-color: var(--a7-lilac-300);
+  color: var(--a7-purple-950);
+}
+
+.on:hover {
+  background: var(--a7-lilac-100);
+}

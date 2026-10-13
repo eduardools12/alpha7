@@ -1,0 +1,92 @@
+/*
+ * Tokens do sistema de design Alpha7. Referência humana: docs/DESIGN_SYSTEM.md.
+ * Cores de marca vêm de design/assets (roxo #270949) e do brief (grafite, lilás, cinza-claro).
+ */
+:root {
+  /* Marca */
+  --a7-purple-950: #170429;
+  --a7-purple-900: #270949; /* roxo profundo oficial */
+  --a7-purple-800: #381268;
+  --a7-purple-700: #4c2088;
+  --a7-violet-500: #7a55c4; /* ação primária: texto branco com contraste 5,3:1 */
+  --a7-violet-400: #8d6ad4;
+  --a7-lilac-500: #8f7aa6; /* lilás secundário oficial: decorativo, nunca texto pequeno */
+  --a7-lilac-300: #b9a6d0;
+  --a7-lilac-100: #e4dcf0;
+  --a7-graphite: #17141d; /* grafite oficial */
+  --a7-mist: #f1eff4; /* cinza-claro oficial */
+
+  /* Superfícies (tema escuro por padrão) */
+  --bg: var(--a7-graphite);
+  --bg-sunken: #100d15;
+  --surface-1: #211d29;
+  --surface-2: #2b2734;
+  --surface-3: #37323f;
+  --surface-purple: #2a0e50;
+  --surface-purple-2: #3a1670;
+  --sidebar: var(--a7-purple-900);
+
+  /* Texto */
+  --text: var(--a7-mist);
+  --text-muted: #b6aec3;
+  --text-faint: #9187a2;
+  --text-on-accent: #ffffff;
+
+  /* Linhas */
+  --line: rgb(255 255 255 / 0.09);
+  --line-strong: rgb(185 166 208 / 0.32);
+
+  /* Estado (somente indicadores, nunca decoração) */
+  --ok: #46c783;
+  --ok-bg: rgb(70 199 131 / 0.16);
+  --warn: #f3b94d;
+  --warn-bg: rgb(243 185 77 / 0.16);
+  --danger: #f57b7b; /* ≥ 4,5:1 sobre o fundo translúcido do próprio selo (verificado com axe) */
+  --danger-bg: rgb(240 106 106 / 0.16);
+  --info: #8a94ee;
+  --info-bg: rgb(138 148 238 / 0.18);
+
+  /* Ação */
+  --accent: var(--a7-violet-500);
+  --accent-hover: var(--a7-violet-400);
+  --focus: #d3c4f5;
+
+  /* Tipografia */
+  --font-ui: 'Inter Variable', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Barlow Condensed', 'Arial Narrow', Impact, sans-serif;
+
+  --fs-xs: 0.75rem;
+  --fs-sm: 0.875rem;
+  --fs-md: 1rem;
+  --fs-lg: 1.125rem;
+  --fs-xl: 1.375rem;
+  --fs-2xl: 1.75rem;
+  --fs-3xl: 2.25rem;
+  --fs-4xl: 3rem;
+
+  /* Espaçamento (base 4px) */
+  --s-1: 0.25rem;
+  --s-2: 0.5rem;
+  --s-3: 0.75rem;
+  --s-4: 1rem;
+  --s-5: 1.25rem;
+  --s-6: 1.5rem;
+  --s-8: 2rem;
+  --s-10: 2.5rem;
+  --s-12: 3rem;
+
+  /* Raios: pequenos para controles, médios para cartões, grandes para painéis */
+  --r-sm: 8px;
+  --r-md: 12px;
+  --r-lg: 18px;
+  --r-pill: 999px;
+
+  --shadow-pop: 0 18px 40px rgb(0 0 0 / 0.45);
+
+  --sidebar-width: 15.5rem;
+  --bottom-nav-height: 4.25rem;
+  --content-max: 80rem;
+  --tap: 2.75rem; /* alvo de toque mínimo (44px) */
+
+  color-scheme: dark;
+}

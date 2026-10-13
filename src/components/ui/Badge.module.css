@@ -1,0 +1,31 @@
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.5rem;
+  padding: 0 var(--s-2);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.ativo {
+  background: var(--ok-bg);
+  color: var(--ok);
+}
+
+.lesionado {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.transicao {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+
+.demo {
+  background: rgb(185 166 208 / 0.16);
+  color: var(--a7-lilac-300);
+  border: 1px dashed var(--a7-lilac-500);
+}

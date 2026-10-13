@@ -1,0 +1,27 @@
+.lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-3);
+}
+
+.mark {
+  width: auto;
+  flex: none;
+}
+
+.words {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.1;
+}
+
+.name {
+  font-size: var(--fs-xl);
+  font-weight: 750;
+  letter-spacing: -0.02em;
+}
+
+.tag {
+  font-size: var(--fs-xs);
+  color: var(--a7-lilac-300);
+}

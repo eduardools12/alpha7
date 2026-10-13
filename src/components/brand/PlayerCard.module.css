@@ -1,0 +1,168 @@
+/*
+ * Carta de atleta. Moldura de 2px simulada por padding + clip-path, com o canto
+ * inferior direito cortado (silhueta de carta esportiva).
+ */
+.card {
+  --cut: 1.75rem;
+  display: block;
+  height: 100%;
+  padding: 2px;
+  background: linear-gradient(160deg, var(--a7-lilac-300), var(--a7-purple-700) 60%, var(--a7-lilac-500));
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut)), calc(100% - var(--cut)) 100%, 0 100%);
+  color: var(--text);
+  text-decoration: none;
+  transition:
+    transform 0.15s,
+    filter 0.15s;
+}
+
+.card:hover {
+  transform: translateY(-3px);
+  filter: brightness(1.12);
+}
+
+.card:focus-visible {
+  outline: none;
+  filter: brightness(1.25) drop-shadow(0 0 0.5rem var(--focus));
+}
+
+.inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--surface-1);
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--cut) + 2px), calc(100% - var(--cut) + 2px) 100%, 0 100%);
+}
+
+.head {
+  position: relative;
+  height: 9.5rem;
+  background: linear-gradient(118deg, var(--a7-purple-800) 0 32%, var(--a7-lilac-300) 32% 80%, var(--surface-3) 80% 100%);
+  overflow: hidden;
+}
+
+.shield {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2;
+}
+
+.trait {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 2;
+  padding: 0.2rem 0.55rem;
+  background: var(--a7-purple-900);
+  color: var(--a7-lilac-100);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.noTrait {
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
+.jersey {
+  position: absolute;
+  left: 50%;
+  bottom: -0.4rem;
+  width: 7.4rem;
+  height: 7.4rem;
+  transform: translateX(-42%);
+}
+
+.demo {
+  position: absolute;
+  left: 0.5rem;
+  bottom: 0.5rem;
+  z-index: 2;
+  padding: 0.05rem 0.4rem;
+  border: 1px dashed var(--a7-purple-900);
+  border-radius: var(--r-pill);
+  color: var(--a7-purple-900);
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  padding: var(--s-3) var(--s-3) var(--s-4);
+}
+
+.name {
+  font-family: var(--font-display);
+  font-size: 1.55rem;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-align: center;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.number {
+  color: var(--a7-lilac-300);
+}
+
+.position {
+  text-align: center;
+  font-size: var(--fs-sm);
+  color: var(--text-muted);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--s-1) 0;
+  margin-top: var(--s-2);
+  padding-top: var(--s-2);
+  border-top: 1px solid var(--line);
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.stat dt {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-faint);
+}
+
+.stat dd {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.status {
+  align-self: center;
+  margin-top: var(--s-1);
+  padding: 0.1rem 0.6rem;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-xs);
+  font-weight: 700;
+}
+
+.lesionado {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.transicao {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
