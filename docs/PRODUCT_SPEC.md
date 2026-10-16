@@ -36,7 +36,7 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Avaliação | 9 atributos de 1 a 99, nova avaliação datada sem sobrescrever as anteriores, prévia do Overall e da variação | Feito |
 | Avaliação | Overall por posição com pesos provisórios editáveis em Configurações | Feito |
 | Escalação | Editor: 6 titulares, líbero, reservas, papel tático, ordem de saque base, prévia do rodízio, salvar, listar, excluir | Parcial |
-| Escalação | Gerador de arte (pôster, referência 05): partida, escalação salva, uniforme roxo/branco, cartaz 4:5 e story 9:16, prévia e PNG real; **só comissão técnica** | Feito (0.5.0) |
+| Artes | Gerador de artes (referência 05, ampliado na 0.8.0): 9 tipos (escalação, dia de jogo, resultado, atleta, carta do atleta, destaque, capa de lances, institucional, capas dos destaques), fundo roxo ou branco, feed 4:5 e story 9:16, fotos dos atletas, prévia e PNG real; **só comissão técnica**. Veja `ARTS.md` | Feito (0.8.0) |
 | Dashboard | Indicadores de elenco e Overall médio, destaques e evolução (reais); treinos e partidas reais (com partidas cadastradas, o resumo de demonstração some) | Feito |
 | Treinos | Criar, editar, excluir e listar treinos (nome, data, duração, descrição, observações, responsável), participantes do elenco, vários exercícios, conclusão/reabertura | Feito (v0.2) |
 | Treinos | Registro rápido de tentativas por fundamento (saque, recepção, levantamento, ataque, bloqueio, defesa), com feedback, histórico recente e desfazer | Feito (v0.2) |
@@ -140,6 +140,6 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 - [x] Regras de placar, saque, rotação e fechamento de set em `domain/match.ts`, com testes que simulam partidas inteiras; as mesmas regras em funções SQL, provadas no banco real (`supabase/tests/matches.test.sql`: papéis, RLS, idempotência, conflito, cascata).
 - [x] Acompanhamento ao vivo pelo celular (botões grandes, um toque por ponto, bloqueio de toque repetido, desfazer, últimos pontos, rotação em quadra); falha ao gravar nunca muda o placar.
 - [x] Estatísticas com denominadores, “Sem dados” ≠ 0, amostra pequena sinalizada, sem conclusões automáticas, separadas das notas 1 a 99.
-- [x] Gerador de artes só para a comissão técnica; PNG baixado de verdade, conferido em navegador (assinatura, 1080 x 1350 e 1080 x 1920, fundo roxo oficial).
+- [x] Gerador de artes só para a comissão técnica; PNG baixado de verdade, conferido em navegador (assinatura, 1080 x 1350, 1080 x 1920 e 1080 x 1080, fundo roxo da paleta do time). Desde a 0.8.0 com nove tipos de arte (`ARTS.md`); verificado em Chrome real e por testes, **não em celular de verdade**.
 - [x] Conferido à mão em produção pelo dono (2026-10-13), com conta de coach: partidas, estatísticas e gerador de artes (0.5.0) e, depois, fotos dos atletas (0.6.0).
 - [ ] **Pendente:** substituições e líbero automático; corrigir o motivo de ponto antigo; exportar relatório; mudar a escalação de um set em andamento; validar com a equipe os limites e critérios da seção D de `METRICS.md`; testar papéis analyst/viewer com contas reais no site publicado.

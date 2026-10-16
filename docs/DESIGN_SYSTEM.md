@@ -162,3 +162,11 @@ Objetivo: tirar o aspecto de painel genérico (pilha de cartões arredondados ig
 - **Entrada (login, nova senha, escolha de equipe, erro de configuração):** `AuthShell` em duas áreas. Painel roxo oficial com as linhas de uma quadra 18 x 9 m (rede, linhas de ataque) em lilás de baixa opacidade, o símbolo A7 original e uma frase; formulário sem caixa ao lado, com título em condensada e filete. Abaixo de 56 rem o painel vira uma faixa no topo. O texto do título continua `h2` e os fluxos de autenticação não mudaram.
 - **Configurações:** índice de âncoras (coluna fixa ao lado, só a partir de 80 rem; no celular a página segue em uma coluna) para as seções Conta e equipe, Backup e restauração, Dados e armazenamento, Cálculo do Overall e Identidade da equipe. Conteúdo e regras das seções inalterados.
 - **Não foi feito:** gradientes decorativos, ilustrações, fotos de fundo. As referências externas continuam valendo só como inspiração (ver seção 11); nada foi copiado.
+
+## 13. Artes: sistema visual próprio (0.8.0)
+
+As artes de divulgação (PNG) seguem um sistema visual **derivado do monograma A7**, separado da interface: diagonais de 26° (o ângulo medido na logo), faixas e planos tonais, assinatura de três blocos no rodapé (os três toques do vôlei), tipografia condensada (Big Shoulders e Instrument Sans) e a paleta da equipe (roxo `#270949`, branco, cinza-lilás `#F0EDF4`, roxo profundo `#160623`) mais tons de apoio derivados do roxo. Sem preto, dourado, sombra nem brilho.
+
+O que a interface e as artes **compartilham**: a identidade roxa, a logo A7 (versão de bordas limpas), as fotos dos atletas (mesma referência do cadastro), a **carta do atleta** (a mesma silhueta, escudo de Overall e camisa do elenco, redesenhada em SVG com as cores dela) e a rotulagem honesta (sem dado, traço; nada inventado). O que **não** se mistura: os tokens `--*` do CSS (a arte é SVG e guarda as suas cores em `features/arts/engine/palette.ts`).
+
+Regras completas, tipos, arquitetura e verificação: [`ARTS.md`](ARTS.md).

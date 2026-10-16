@@ -124,3 +124,52 @@
   flex-wrap: wrap;
   gap: var(--s-3);
 }
+
+.hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}
+
+.range {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+}
+
+.rangeRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--s-3);
+}
+
+.rangeValue {
+  color: var(--text-muted);
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.range input[type='range'] {
+  width: 100%;
+  min-height: var(--tap);
+  accent-color: var(--accent);
+}
+
+.stats {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  min-width: 0;
+}
+
+.statRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 7rem;
+  gap: var(--s-3);
+  /* os rótulos podem quebrar em duas linhas no celular: os campos ficam alinhados pela base */
+  align-items: end;
+}

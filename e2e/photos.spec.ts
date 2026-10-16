@@ -101,7 +101,7 @@ for (const viewport of [
       await expect(page.getByRole('img', { name: 'Foto de Felipe B.' })).toHaveCount(0);
     });
 
-    test('a arte PNG baixada mostra a foto do atleta no lugar certo; sem foto, o número', async ({ page }, info) => {
+    test('a arte PNG baixada mostra a foto do atleta (duotone roxo) no lugar certo; sem foto, o número', async ({ page }, info) => {
       await addPhoto(page, 'demo-p-08'); // Gabriel S. joga em P2 na escalação de exemplo
       await page.goto('/partidas/nova');
       await page.getByLabel('Adversário').fill('Time Foto');
@@ -109,11 +109,12 @@ for (const viewport of [
       await page.getByRole('button', { name: 'Cadastrar partida' }).click();
       await expect(page.getByText('Partida cadastrada.')).toBeVisible();
       await page.goto('/artes');
-      const preview = page.getByRole('img', { name: /Prévia da arte da escalação contra Time Foto/ });
+      const preview = page.getByRole('img', { name: /Prévia da arte: escalação contra Time Foto/ });
       await expect(preview).toBeVisible();
       const svg = decodeURIComponent((await preview.getAttribute('src')) ?? '');
       expect(svg).toContain('data:image/jpeg;base64,'); // a foto está no mesmo SVG que vira PNG
-      expect(svg).toContain('clip-path="url(#clip-1)"'); // P2
+      expect(svg).toContain('<image id="foto"');
+      expect(svg).toContain('<feComponentTransfer>'); // duotone roxo
 
       const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Baixar PNG' }).click()]);
       const file = info.outputPath(download.suggestedFilename());
@@ -121,13 +122,16 @@ for (const viewport of [
       const bytes = readFileSync(file);
       expect(bytes.readUInt32BE(16)).toBe(1080);
       expect(bytes.readUInt32BE(20)).toBe(1350);
-      // Centro do disco de P2 (cartaz): x = 90 + 900 * 0,83; y = fileira da rede. Ali está a foto (verde), não o roxo do disco.
-      const [r, g, b] = await pixel(page, bytes, 837, 560);
-      expect(g, `pixel da foto: rgb(${r},${g},${b})`).toBeGreaterThan(150);
-      expect(r ?? 255).toBeLessThan(120);
-      // O disco de P3 (sem foto) continua com o fundo violeta do avatar padrão.
-      const [pr, pg, pb] = await pixel(page, bytes, 540 + 40, 560 - 50);
-      expect(pg ?? 255, `pixel sem foto: rgb(${pr},${pg},${pb})`).toBeLessThan(120);
+      // Área de P2 (coluna 3, fileira da rede): a foto verde sai em duotone, isto é, lilás claro (cerca de rgb 183, 173, 194).
+      const [r, g, b] = await pixel(page, bytes, 820, 491);
+      expect(Math.abs((r ?? 0) - 183), `pixel da foto: rgb(${r},${g},${b})`).toBeLessThanOrEqual(30);
+      expect(Math.abs((g ?? 0) - 173)).toBeLessThanOrEqual(30);
+      expect(Math.abs((b ?? 0) - 194)).toBeLessThanOrEqual(30);
+      // P3 (coluna 2, sem foto): o bloco do número continua no roxo de apoio (#573F71).
+      const [pr, pg, pb] = await pixel(page, bytes, 414, 606);
+      expect(Math.abs((pr ?? 0) - 0x57), `pixel sem foto: rgb(${pr},${pg},${pb})`).toBeLessThanOrEqual(14);
+      expect(Math.abs((pg ?? 0) - 0x3f)).toBeLessThanOrEqual(14);
+      expect(Math.abs((pb ?? 0) - 0x71)).toBeLessThanOrEqual(14);
     });
 
     test('perfil com foto: sem rolagem horizontal e sem violações de acessibilidade', async ({ page }) => {
