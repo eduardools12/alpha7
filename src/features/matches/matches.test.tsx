@@ -282,6 +282,89 @@ describe('Acompanhamento ao vivo', () => {
     expect(stored(ctx).rallies[1]?.playerId).toBeNull();
   });
 
+  describe('atleta envolvido escolhido na quadra', () => {
+    const involvedGroup = () => screen.getByRole('group', { name: /Atleta envolvido no próximo ponto/ });
+    const spot = (name: string) => within(involvedGroup()).getByRole('button', { name });
+
+    it('as seis posições aparecem como botões com a posição e o papel na descrição', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      expect(spot('Ana A. #1')).toHaveAccessibleDescription('posição P1, Levantador');
+      expect(spot('Bia B. #2')).toHaveAccessibleDescription('posição P2, Oposto');
+      expect(spot('Fabi F. #6')).toHaveAccessibleDescription('posição P6, Central');
+      expect(within(involvedGroup()).getByRole('button', { name: 'Gabi G. #7' })).toBeInTheDocument(); // o líbero continua à parte
+    });
+
+    it('tocar na posição escolhe o atleta só para o próximo ponto; tocar de novo desmarca', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(spot('Cris C. #3'));
+      expect(spot('Cris C. #3')).toHaveAttribute('aria-pressed', 'true');
+      await ctx.user.click(spot('Cris C. #3'));
+      expect(spot('Cris C. #3')).toHaveAttribute('aria-pressed', 'false');
+      await ctx.user.click(spot('Cris C. #3'));
+      await tap(ctx, 'Ataque vencedor');
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(stored(ctx).rallies[0]).toMatchObject({ reason: 'ataque', playerId: 'p3' });
+      expect(spot('Cris C. #3')).toHaveAttribute('aria-pressed', 'false'); // vale só para um ponto
+    });
+
+    it('a quadra e o líbero são exclusivos: só um atleta envolvido por vez', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(spot('Bia B. #2'));
+      await ctx.user.click(spot('Gabi G. #7'));
+      expect(spot('Gabi G. #7')).toHaveAttribute('aria-pressed', 'true');
+      expect(spot('Bia B. #2')).toHaveAttribute('aria-pressed', 'false');
+      await ctx.user.click(spot('Bia B. #2'));
+      expect(spot('Gabi G. #7')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('depois de conquistar o saque a quadra gira e a escolha continua pelo atleta, não pela posição', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await tap(ctx, 'Ponto do adversário');
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      await ctx.user.click(spot('Cris C. #3'));
+      await tap(ctx, 'Ponto do Alpha7'); // side-out: o Alpha7 gira
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(2));
+      expect(spot('Bia B. #2')).toHaveAccessibleDescription('posição P1, Oposto');
+      expect(spot('Ana A. #1')).toHaveAccessibleDescription('posição P6, Levantador'); // quem sacava vai para o fundo
+      expect(stored(ctx).rallies[1]).toMatchObject({ playerId: 'p3', winnerSide: 'us' });
+    });
+
+    it('ace com atleta escolhido na quadra grava direto com ele, sem a barra do sacador', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(spot('Dani D. #4'));
+      await ctx.user.click(within(screen.getByRole('region', { name: 'Ponto do Alpha7' })).getByRole('button', { name: 'Ace' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(stored(ctx).rallies[0]).toMatchObject({ reason: 'ace', playerId: 'p4' });
+      expect(screen.queryByRole('group', { name: 'Confirmar o atleta do ponto' })).not.toBeInTheDocument();
+    });
+
+    it('sem líbero no set, a lista traz só as seis posições', async () => {
+      const set: MatchSet = {
+        matchId: 'm1',
+        number: 1,
+        firstServer: 'us',
+        starters: roles.map((role, slot) => ({ slot, playerId: `p${slot + 1}`, role })),
+        liberoId: null,
+        createdAt: NOW,
+      };
+      await openLive(world({ matches: [baseMatch({ status: 'em_andamento' })], matchSets: [set] }));
+      await screen.findByRole('region', { name: 'Placar' });
+      expect(within(involvedGroup()).getAllByRole('button')).toHaveLength(6);
+    });
+
+    it('o texto de quem saca continua visível para conferir a rotação', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      expect(screen.getByText('Saca agora: Ana A. #1.')).toBeInTheDocument();
+      expect(screen.getByRole('list', { name: 'Formação na rotação 1' })).toBeInTheDocument();
+    });
+  });
+
   describe('sugestão do sacador (confirmar antes de gravar)', () => {
     const bar = () => screen.findByRole('group', { name: 'Confirmar o atleta do ponto' });
     const mine = () => within(screen.getByRole('region', { name: 'Ponto do Alpha7' }));

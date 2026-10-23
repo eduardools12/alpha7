@@ -157,6 +157,7 @@
 
 .chips > * {
   flex: none;
+  min-height: 2.75rem; /* alvo de toque de 44px também no botão do líbero */
 }
 
 @media (min-width: 48rem) {

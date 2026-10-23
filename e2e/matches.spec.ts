@@ -107,6 +107,14 @@ for (const viewport of [
         const box = await page.getByRole('region', { name: 'Ponto do Alpha7' }).getByRole('button', { name: reason }).boundingBox();
         expect(box?.height ?? 0, `${reason}: altura do alvo de toque`).toBeGreaterThanOrEqual(44);
       }
+      // Quadra clicável (atleta envolvido): cada posição e o líbero são alvos de toque de pelo menos 44px, sem estourar a largura.
+      const choices = page.getByRole('group', { name: /Atleta envolvido no próximo ponto/ }).getByRole('button');
+      expect(await choices.count()).toBeGreaterThanOrEqual(6);
+      for (const box of await choices.evaluateAll((nodes) => nodes.map((n) => n.getBoundingClientRect().toJSON()))) {
+        expect(box.height, 'altura de um atleta na quadra').toBeGreaterThanOrEqual(44);
+        expect(box.width, 'largura de um atleta na quadra').toBeGreaterThanOrEqual(44);
+        expect(box.right, 'atleta na quadra dentro da tela').toBeLessThanOrEqual(viewport.width);
+      }
       // Barra de confirmação do sacador aberta: sem rolagem horizontal, alvos de 44px e acessível.
       await page.getByRole('region', { name: 'Ponto do Alpha7' }).getByRole('button', { name: 'Ace' }).click();
       await expect(page.getByRole('group', { name: 'Confirmar o atleta do ponto' })).toBeVisible();

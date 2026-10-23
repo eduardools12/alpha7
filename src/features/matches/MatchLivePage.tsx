@@ -15,7 +15,6 @@ import { FUNDAMENTALS, FUNDAMENTAL_LABEL, OUTCOME_VALUES, isFundamental, outcome
 import { newId } from '@/domain/id';
 import {
   RALLY_REASONS,
-  courtPositions,
   nextContext,
   setterPosition,
   planConclude,
@@ -160,15 +159,7 @@ export function MatchLivePage() {
 
   const open = current !== null && !current.closed;
   const context = open && current ? nextContext(current) : null;
-  const onCourt = open && current && context ? courtPositions(current.set, context.rotation) : [];
   const liberoPlayer = current?.set.liberoId ? playersById.get(current.set.liberoId) : undefined;
-  const involvable: Player[] = [
-    ...onCourt.flatMap((s) => {
-      const p = playersById.get(s.playerId);
-      return p ? [p] : [];
-    }),
-    ...(liberoPlayer ? [liberoPlayer] : []),
-  ];
   const label = (p: Player) => `${shortName(p.name)} #${p.jerseyNumber}`;
   const activeAll = state.sets.flatMap((s) => s.rallies);
   const lastRally = state.lastRally;
@@ -341,13 +332,25 @@ export function MatchLivePage() {
               </p>
               <div className={styles.involved} role="group" aria-label="Atleta envolvido no próximo ponto (opcional)">
                 <span className={styles.involvedLabel}>Atleta envolvido (opcional)</span>
-                <div className={styles.chips}>
-                  {involvable.map((p) => (
-                    <Chip key={p.id} pressed={involvedId === p.id} onClick={() => setInvolvedId((id) => (id === p.id ? null : p.id))}>
-                      {label(p)}
+                <RotationCourt
+                  set={current.set}
+                  rotation={context.rotation}
+                  servingSide={context.servingSide}
+                  playersById={playersById}
+                  selectedId={involvedId}
+                  onSelect={(id) => setInvolvedId((previous) => (previous === id ? null : id))}
+                />
+                {liberoPlayer && (
+                  <div className={styles.chips}>
+                    <Chip pressed={involvedId === liberoPlayer.id} onClick={() => setInvolvedId((id) => (id === liberoPlayer.id ? null : liberoPlayer.id))}>
+                      {label(liberoPlayer)}
                     </Chip>
-                  ))}
-                </div>
+                  </div>
+                )}
+                {context.servingSide === 'us' && context.serverPlayerId && playersById.get(context.serverPlayerId) && (
+                  <p className={styles.muted}>Saca agora: {label(playersById.get(context.serverPlayerId) as Player)}.</p>
+                )}
+                {context.servingSide === 'them' && <p className={styles.muted}>O adversário saca. Se o Alpha7 ganhar o ponto, conquista o saque e gira.</p>}
               </div>
 
               {suggestion && (
@@ -464,13 +467,6 @@ export function MatchLivePage() {
           </div>
 
           <aside className={styles.sideCol}>
-            <Card title="Rotação atual">
-              <RotationCourt set={current.set} rotation={context.rotation} servingSide={context.servingSide} playersById={playersById} />
-              {context.servingSide === 'us' && context.serverPlayerId && playersById.get(context.serverPlayerId) && (
-                <p className={styles.muted}>Saca agora: {label(playersById.get(context.serverPlayerId) as Player)}.</p>
-              )}
-              {context.servingSide === 'them' && <p className={styles.muted}>O adversário saca. Se o Alpha7 ganhar o ponto, conquista o saque e gira.</p>}
-            </Card>
             <Card title="Últimos pontos">
               {history.length === 0 ? (
                 <p className={styles.muted}>Nenhum ponto neste set ainda.</p>
