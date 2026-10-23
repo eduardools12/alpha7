@@ -311,6 +311,22 @@ export function reasonProblem(reason: RallyReason | null, winner: Side, servingS
 }
 
 /**
+ * Atleta que a tela SUGERE (nunca grava sozinha) como envolvido no ponto. Só o sacador do Alpha7 é dedutível com certeza:
+ * num ace do Alpha7 ou num erro de saque do Alpha7 (ponto do adversário) quem sacava é quem fez ou errou o ponto.
+ * Vale só para o campo `playerId` do ponto: nunca gera ação técnica (motivo e ação são camadas separadas).
+ */
+export function suggestedInvolved(
+  reason: RallyReason | null,
+  winner: Side,
+  context: Pick<RallyContext, 'servingSide' | 'serverPlayerId'>,
+): string | null {
+  if (context.servingSide !== 'us' || context.serverPlayerId === null) return null;
+  if (reason === 'ace' && winner === 'us') return context.serverPlayerId;
+  if (reason === 'erro_saque' && winner === 'them') return context.serverPlayerId;
+  return null;
+}
+
+/**
  * Valida e monta um rally (e as ações técnicas dele). Idempotente por `attemptKey`: repetir o envio devolve o
  * rally original como `duplicate`, sem mudar nada. Recusa: partida concluída, set inexistente, set que não é o atual,
  * set já encerrado pela regra de pontuação, conflito de número, motivo incoerente, atleta ou ação inválidos.

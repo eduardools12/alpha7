@@ -20,6 +20,7 @@ import {
   setterPosition,
   setWinner,
   setsToWin,
+  suggestedInvolved,
   validateFormat,
   validateMatchDraft,
   type Match,
@@ -622,5 +623,35 @@ describe('resumo para o dashboard', () => {
     expect(upcomingMatch([undated, later, sooner])?.id).toBe('sooner');
     expect(upcomingMatch([undated])?.id).toBe('undated');
     expect(upcomingMatch([sooner, base('live', { status: 'em_andamento' })])?.id).toBe('live');
+  });
+});
+
+describe('sugestão do sacador', () => {
+  const ours = { servingSide: 'us' as const, serverPlayerId: 'p1' };
+
+  it('ace do Alpha7 sugere o sacador', () => {
+    expect(suggestedInvolved('ace', 'us', ours)).toBe('p1');
+  });
+
+  it('erro de saque do Alpha7 (ponto do adversário) sugere o sacador', () => {
+    expect(suggestedInvolved('erro_saque', 'them', ours)).toBe('p1');
+  });
+
+  it('ace sofrido e erro de saque do adversário não sugerem ninguém (o sacador não é do Alpha7)', () => {
+    expect(suggestedInvolved('ace', 'them', ours)).toBeNull();
+    expect(suggestedInvolved('erro_saque', 'us', ours)).toBeNull();
+  });
+
+  it('os outros motivos e o ponto sem motivo nunca sugerem', () => {
+    for (const reason of [null, 'ataque', 'bloqueio', 'erro_ataque', 'erro_recepcao', 'erro_outro', 'outro'] as const) {
+      expect(suggestedInvolved(reason, 'us', ours)).toBeNull();
+      expect(suggestedInvolved(reason, 'them', ours)).toBeNull();
+    }
+  });
+
+  it('com o adversário sacando ou sem sacador conhecido, não sugere', () => {
+    expect(suggestedInvolved('ace', 'us', { servingSide: 'them', serverPlayerId: null })).toBeNull();
+    expect(suggestedInvolved('erro_saque', 'them', { servingSide: 'them', serverPlayerId: null })).toBeNull();
+    expect(suggestedInvolved('ace', 'us', { servingSide: 'us', serverPlayerId: null })).toBeNull();
   });
 });

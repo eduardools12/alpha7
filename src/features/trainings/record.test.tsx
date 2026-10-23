@@ -356,3 +356,142 @@ describe('Registro rápido: persistência e integridade', () => {
     expect(await screen.findByText('Treino não encontrado')).toBeInTheDocument();
   });
 });
+
+describe('Rodízio de atletas e atalhos de teclado', () => {
+  /** Botões de atleta, na ordem da tela (por camisa), e qual está selecionado. */
+  const playerButtons = () => within(screen.getByRole('group', { name: 'Jogador' })).getAllByRole('button');
+  const selectedIndex = () => playerButtons().findIndex((b) => b.getAttribute('aria-pressed') === 'true');
+  const rotationBox = () => screen.getByRole('checkbox', { name: 'Passar para o próximo atleta' });
+  const everyField = () => screen.getByRole('spinbutton', { name: 'Tentativas por atleta antes de trocar' });
+
+  async function ready(ctx: Ctx) {
+    await pickPlayer(ctx);
+    await pickFundamental(ctx, 'Saque');
+    return selectedIndex();
+  }
+
+  it('desligado (padrão), o atleta continua o mesmo depois de registrar', async () => {
+    const ctx = await open();
+    expect(rotationBox()).not.toBeChecked();
+    const start = await ready(ctx);
+    await tap(ctx, /^Ace,/);
+    await waitFor(() => expect(stored(ctx)).toHaveLength(1));
+    expect(selectedIndex()).toBe(start);
+  });
+
+  it('ligado, passa para o próximo atleta a cada registro (e o registro vai para quem estava selecionado)', async () => {
+    const ctx = await open();
+    const start = await ready(ctx);
+    const firstId = playerButtons()[start]?.getAttribute('aria-label');
+    await ctx.user.click(rotationBox());
+    await tap(ctx, /^Ace,/);
+    await waitFor(() => expect(stored(ctx)).toHaveLength(1));
+    await waitFor(() => expect(selectedIndex()).toBe((start + 1) % playerButtons().length));
+    expect(firstId).toContain('Gabriel S.');
+    expect(stored(ctx)[0]?.playerId).toBe(allStored(ctx).at(-1)?.playerId);
+    // o próximo registro vai para o novo atleta: dois eventos, de dois atletas diferentes
+    await tap(ctx, /^Válido,/);
+    await waitFor(() => expect(stored(ctx)).toHaveLength(2));
+    expect(new Set(stored(ctx).map((e) => e.playerId)).size).toBe(2);
+  });
+
+  it('a cada 3 tentativas: o atleta só muda no terceiro registro', async () => {
+    const ctx = await open();
+    const start = await ready(ctx);
+    await ctx.user.click(rotationBox());
+    await ctx.user.clear(everyField());
+    await ctx.user.type(everyField(), '3');
+    for (const expectedAfter of [start, start, (start + 1) % playerButtons().length]) {
+      await tap(ctx, /^Ace,/);
+      await waitFor(() => expect(selectedIndex()).toBe(expectedAfter));
+    }
+    expect(stored(ctx)).toHaveLength(3);
+    expect(new Set(stored(ctx).map((e) => e.playerId)).size).toBe(1); // as 3 tentativas foram do mesmo atleta
+  });
+
+  it('número de tentativas vazio, 0 ou 1000 vira um valor válido ao sair do campo', async () => {
+    const ctx = await open();
+    await ctx.user.click(rotationBox());
+    await ctx.user.clear(everyField());
+    await ctx.user.tab();
+    expect(everyField()).toHaveValue(1);
+    await ctx.user.clear(everyField());
+    await ctx.user.type(everyField(), '0');
+    await ctx.user.tab();
+    expect(everyField()).toHaveValue(1);
+    await ctx.user.clear(everyField());
+    await ctx.user.type(everyField(), '1000');
+    await ctx.user.tab();
+    expect(everyField()).toHaveValue(20);
+  });
+
+  it('escolher o atleta à mão recomeça a contagem da série', async () => {
+    const ctx = await open();
+    const start = await ready(ctx);
+    await ctx.user.click(rotationBox());
+    await ctx.user.clear(everyField());
+    await ctx.user.type(everyField(), '2');
+    await tap(ctx, /^Ace,/); // 1 de 2
+    await waitFor(() => expect(stored(ctx)).toHaveLength(1));
+    await ctx.user.click(playerButtons()[start] as HTMLElement); // escolhe de novo o mesmo atleta: série recomeça
+    await tap(ctx, /^Ace,/); // 1 de 2 outra vez: não troca
+    await waitFor(() => expect(stored(ctx)).toHaveLength(2));
+    expect(selectedIndex()).toBe(start);
+  });
+
+  it('com um único participante, o rodízio continua nele', async () => {
+    const ws = createEmptyWorkspace();
+    ws.players = [makePlayer({ id: 'solo', name: 'Ana Alves', jerseyNumber: 3 })];
+    ws.trainings = [makeTraining({ id: 't1', name: 'Treino solo', participantIds: ['solo'], status: 'aberto' })];
+    ws.exercises = [makeExercise('t1', { id: 'x1', name: 'Saque', order: 0, focus: 'saque' })];
+    const ctx = renderApp({ path: '/treinos/t1/registrar', workspace: ws });
+    await screen.findByRole('heading', { level: 1, name: 'Registrar treino' });
+    await ctx.user.click(screen.getByRole('button', { name: /Ana A\., camisa 3/ }));
+    await ctx.user.click(rotationBox());
+    await tap(ctx, /^Ace,/);
+    await waitFor(() => expect(allStored(ctx)).toHaveLength(1));
+    expect(screen.getByRole('button', { name: /Ana A\., camisa 3/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('tecla 1 registra o primeiro resultado do fundamento; teclas sem resultado correspondente não fazem nada', async () => {
+    const ctx = await open();
+    await ready(ctx); // Saque: ace, válido, erro
+    await ctx.user.keyboard('1');
+    await waitFor(() => expect(stored(ctx)).toHaveLength(1));
+    expect(stored(ctx)[0]).toMatchObject({ fundamental: 'saque', outcome: 'ace' });
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Ace,/ })).toBeEnabled());
+    await ctx.user.keyboard('9');
+    await ctx.user.keyboard('3');
+    await waitFor(() => expect(stored(ctx)).toHaveLength(2));
+    expect(stored(ctx)[1]).toMatchObject({ fundamental: 'saque', outcome: 'erro' });
+  });
+
+  it('setas trocam de atleta; sem atleta escolhido, a seta direita escolhe o primeiro', async () => {
+    const ctx = await open();
+    expect(selectedIndex()).toBe(-1);
+    await ctx.user.keyboard('{ArrowRight}');
+    expect(selectedIndex()).toBe(0);
+    await ctx.user.keyboard('{ArrowRight}');
+    expect(selectedIndex()).toBe(1);
+    await ctx.user.keyboard('{ArrowLeft}{ArrowLeft}');
+    expect(selectedIndex()).toBe(playerButtons().length - 1); // volta e dá a volta pelo fim
+  });
+
+  it('sem atleta escolhido, as teclas de resultado não registram nada', async () => {
+    const ctx = await open();
+    await ctx.user.keyboard('1');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(stored(ctx)).toHaveLength(0);
+  });
+
+  it('digitar no campo de tentativas não dispara atalhos', async () => {
+    const ctx = await open();
+    await ready(ctx);
+    await ctx.user.click(rotationBox()); // o campo só aceita digitação com o rodízio ligado
+    await ctx.user.click(everyField());
+    await ctx.user.keyboard('1');
+    await new Promise((resolve) => setTimeout(resolve, 60));
+    expect(stored(ctx)).toHaveLength(0);
+  });
+});
+

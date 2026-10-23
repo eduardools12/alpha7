@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+.pytest_cache/
+out/
+output/
+*.onnx
+*.annotated.mp4

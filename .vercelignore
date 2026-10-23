@@ -3,6 +3,7 @@
 /design
 /docs
 /e2e
+/services
 /supabase
 /test-results
 /playwright-report

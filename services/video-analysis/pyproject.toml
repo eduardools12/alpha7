@@ -1,0 +1,14 @@
+[project]
+name = "alpha7-video-analysis"
+version = "0.1.0"
+description = "Protótipo de análise de vídeo de voleibol do Alpha7 (detecção de pessoas e trilhas temporárias)."
+requires-python = ">=3.11"
+dependencies = ["opencv-python-headless>=4.10,<5", "numpy>=2.0", "scipy>=1.13", "onnxruntime>=1.20"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = ["real_video: precisa de uma gravação real (variável ALPHA7_REAL_VIDEO); ignorado quando ela não existe"]

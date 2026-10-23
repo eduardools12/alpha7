@@ -489,3 +489,48 @@
 .footer {
   display: flex;
 }
+
+/* Rodízio de atletas: opção discreta, sem competir com os botões de resultado. */
+.rotation {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-5);
+}
+
+.check,
+.every {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2.75rem;
+  font-size: var(--fs-sm);
+}
+
+.check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--a7-lilac-300);
+}
+
+.every input {
+  width: 4.5rem;
+  min-height: 2.75rem;
+  padding: 0 var(--s-2);
+  background: var(--bg-sunken);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+}
+
+.every input:disabled {
+  opacity: 0.5;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: var(--fs-xs);
+}

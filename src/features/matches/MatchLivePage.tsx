@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Can, useCan } from '@/auth/AccessContext';
 import { PATHS } from '@/app/routes';
@@ -19,6 +19,7 @@ import {
   nextContext,
   setterPosition,
   planConclude,
+  suggestedInvolved,
   reasonLabel,
   reasonProblem,
   type RallyReason,
@@ -40,6 +41,13 @@ interface Toast {
   text: string;
 }
 
+/** Ponto de ace ou erro de saque do Alpha7 esperando a pessoa confirmar (ou trocar) o atleta sugerido: o sacador. */
+interface Suggestion {
+  winner: Side;
+  reason: RallyReason;
+  playerId: string;
+}
+
 export function MatchLivePage() {
   useWakeLock(); // a tela não apaga durante o jogo
   const { matchId } = useParams();
@@ -49,6 +57,8 @@ export function MatchLivePage() {
   const playersById = useMemo(() => new Map(data.players.map((p) => [p.id, p])), [data.players]);
 
   const [involvedId, setInvolvedId] = useState<string | null>(null);
+  const [suggestion, setSuggestion] = useState<Suggestion | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
   const [pending, setPending] = useState(false);
   const inFlight = useRef(false);
   const offline = useCloudOffline();
@@ -64,6 +74,11 @@ export function MatchLivePage() {
     setToast(next);
     toastTimer.current = next.kind === 'error' ? null : window.setTimeout(() => setToast(null), TOAST_MS);
   };
+
+  // A barra de confirmação recebe o foco ao abrir (teclado e leitor de tela chegam direto no botão principal).
+  useEffect(() => {
+    if (suggestion) barRef.current?.querySelector('button')?.focus();
+  }, [suggestion]);
 
   if (!match) {
     return (
@@ -160,23 +175,39 @@ export function MatchLivePage() {
   const startedEmpty = current !== null && !data.rallies.some((r) => r.matchId === match.id && r.setNumber === current.set.number);
   const conclusion = planConclude(state);
 
-  const record = (winner: Side, reason: RallyReason | null) => {
+  /** Grava o ponto. A barra de sugestão só fecha depois do sucesso: se falhar, ela continua e o erro fica na tela. */
+  const commit = (winner: Side, reason: RallyReason | null, playerId: string | null) => {
     if (!current || !context) return;
-    const involved = involvedId;
     void guarded(async () => {
       const rally = await actions.recordRally(match.id, {
         setNumber: current.set.number,
         expectedSeq: context.seq,
         winner,
         reason,
-        playerId: involved,
+        playerId,
         attemptKey: newId('attempt'), // uma chave por toque: repetir o MESMO envio nunca duplica
         actions: [],
       });
       setInvolvedId(null);
+      setSuggestion(null);
       showToast({ kind: 'ok', text: `Ponto ${rally.seq}: ${rallyDescription(rally, playersById)}` });
       navigator.vibrate?.(12);
     });
+  };
+
+  /**
+   * Toque num motivo. Em ace ou erro de saque do Alpha7, sem atleta escolhido, o app SUGERE o sacador e espera a confirmação
+   * (nunca grava sozinho). Sem sacador conhecido, ou fora do elenco, grava direto como sempre.
+   */
+  const record = (winner: Side, reason: RallyReason | null) => {
+    if (!current || !context) return;
+    setSuggestion(null);
+    const suggested = involvedId === null ? suggestedInvolved(reason, winner, context) : null;
+    if (reason !== null && suggested !== null && playersById.has(suggested)) {
+      setSuggestion({ winner, reason, playerId: suggested });
+      return;
+    }
+    commit(winner, reason, involvedId);
   };
 
   const undo = () =>
@@ -318,6 +349,30 @@ export function MatchLivePage() {
                   ))}
                 </div>
               </div>
+
+              {suggestion && (
+                <div ref={barRef} className={styles.suggest} role="group" aria-label="Confirmar o atleta do ponto">
+                  <p className={styles.suggestText}>
+                    <strong>{reasonLabel(suggestion.reason, suggestion.winner)}</strong>:{' '}
+                    {label(playersById.get(suggestion.playerId) as Player)} (sacador). Confirmar o atleta?
+                  </p>
+                  <div className={styles.suggestActions}>
+                    <Button
+                      variant="primary"
+                      disabled={pending || offline}
+                      onClick={() => commit(suggestion.winner, suggestion.reason, suggestion.playerId)}
+                    >
+                      Confirmar {label(playersById.get(suggestion.playerId) as Player)}
+                    </Button>
+                    <Button disabled={pending} onClick={() => setSuggestion(null)}>
+                      Escolher outro atleta
+                    </Button>
+                    <Button variant="ghost" disabled={pending || offline} onClick={() => commit(suggestion.winner, suggestion.reason, null)}>
+                      Sem atleta
+                    </Button>
+                  </div>
+                </div>
+              )}
 
               <div className={styles.sides}>
                 <section className={styles.side} aria-label="Ponto do Alpha7">

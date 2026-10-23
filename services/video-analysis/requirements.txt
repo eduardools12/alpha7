@@ -1,0 +1,7 @@
+# Dependências do serviço de análise de vídeo (isoladas do frontend). Instale num ambiente virtual.
+# OpenCV 4.x: o 5.0 removeu o HOGDescriptor usado como linha de base.
+opencv-python-headless>=4.10,<5
+numpy>=2.0
+scipy>=1.13
+# Só necessário para o detector yolox-onnx (o hog funciona sem ele).
+onnxruntime>=1.20
