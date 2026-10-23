@@ -66,6 +66,19 @@ export function duplicatedAthletes(data: ReviewData, visibleTrackIds: readonly (
   return [...count].filter(([, n]) => n > 1).map(([player]) => player);
 }
 
+/**
+ * Atletas associados às trilhas visíveis no quadro, sem repetir e só os que ainda estão no elenco: a SUGESTÃO para detalhar um
+ * ponto. Quem confirma é a pessoa; isto nunca cria ação técnica.
+ */
+export function suggestedAthletes(data: ReviewData, visibleTrackIds: readonly number[], playerIds: ReadonlySet<string>): string[] {
+  const result: string[] = [];
+  for (const id of visibleTrackIds) {
+    const player = data.assignments[id];
+    if (player !== undefined && playerIds.has(player) && !result.includes(player)) result.push(player);
+  }
+  return result;
+}
+
 export const setSync = (data: ReviewData, setNumber: number, reference: SyncReference): ReviewData => ({ ...data, syncs: { ...data.syncs, [setNumber]: reference } });
 
 export function clearSync(data: ReviewData, setNumber: number): ReviewData {

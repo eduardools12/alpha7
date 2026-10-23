@@ -212,3 +212,39 @@
   text-align: left;
   white-space: normal;
 }
+
+.detailPanel:focus-visible {
+  outline: 2px solid var(--focus, currentColor);
+  outline-offset: 2px;
+}
+
+.detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  margin: var(--s-3) 0;
+}
+
+.actionList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  margin: var(--s-3) 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--fs-sm);
+}
+
+.actionList li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+}
+
+.error {
+  color: var(--danger, currentColor);
+  font-size: var(--fs-sm);
+}
+

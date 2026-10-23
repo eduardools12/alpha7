@@ -614,3 +614,81 @@ describe('Revisão com vídeo: pontos da partida e o instante do vídeo', () => 
   });
 });
 
+
+describe('Revisão com vídeo: detalhar qualquer ponto', () => {
+  const trackSelect = (n: number) => screen.getByLabelText(`Atleta da trilha T${n}`) as HTMLSelectElement;
+  const points = () => within(screen.getByRole('region', { name: 'Pontos da partida' }));
+  const panel = () => within(screen.getByRole('region', { name: 'Detalhar o ponto' }));
+
+  it('"Detalhar" abre o painel do ponto escolhido (não só o último) sem registrar nada', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    expect(screen.queryByRole('region', { name: 'Detalhar o ponto' })).not.toBeInTheDocument();
+    await ctx.user.click(points().getByRole('button', { name: 'Detalhar o ponto 1 x 0' }));
+    expect(panel().getByRole('heading', { name: 'Detalhar o ponto 1 x 0' })).toBeInTheDocument();
+    expect(panel().getByText(/Nenhuma ação técnica registrada neste ponto/)).toBeInTheDocument(); // motivo e atleta do ponto não viram ação
+    expect(points().queryByText(/ação técnica registrada\b/)).not.toBeInTheDocument();
+  });
+
+  it('registra a ação no ponto ANTIGO escolhido, mostra na lista e na contagem, e desfazer anula', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    await ctx.user.click(points().getByRole('button', { name: 'Detalhar o ponto 1 x 0' }));
+    await ctx.user.selectOptions(panel().getByLabelText('Atleta'), 'p2');
+    await ctx.user.selectOptions(panel().getByLabelText('Fundamento'), 'ataque');
+    await ctx.user.click(panel().getByRole('button', { name: 'Ponto' }));
+    expect(await panel().findByText(/Bia B\. #2 · Ataque: Ponto/)).toBeInTheDocument();
+    expect(points().getByText('1 ação técnica')).toBeInTheDocument();
+    expect(points().getByText('1 x 0')).toBeInTheDocument(); // o placar não mudou
+    await ctx.user.click(panel().getByRole('button', { name: 'Desfazer ação técnica de Bia B. #2' }));
+    await waitFor(() => expect(panel().queryByText(/Bia B\. #2 · Ataque/)).not.toBeInTheDocument());
+    expect(points().queryByText('1 ação técnica')).not.toBeInTheDocument();
+  });
+
+  it('as trilhas associadas visíveis agora no vídeo viram sugestão: tocar na sugestão só escolhe o atleta', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(1), 'p1');
+    await ctx.user.selectOptions(trackSelect(2), 'p2');
+    videoElement().currentTime = 0;
+    act(() => void fireEvent.seeked(videoElement()));
+    await ctx.user.click(points().getByRole('button', { name: 'Detalhar o ponto 1 x 1' }));
+    const suggestions = panel().getByRole('group', { name: 'Atletas nas caixas deste instante' });
+    expect(within(suggestions).getAllByRole('button').map((b) => b.textContent)).toEqual(['Ana A. #1', 'Bia B. #2']);
+    await ctx.user.click(within(suggestions).getByRole('button', { name: 'Bia B. #2' }));
+    expect(panel().getByLabelText('Atleta')).toHaveValue('p2');
+    expect(points().queryByText(/ação técnica$/)).not.toBeInTheDocument(); // nada foi registrado
+  });
+
+  it('sem trilha associada visível, explica como ter sugestões', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    await ctx.user.click(points().getByRole('button', { name: 'Detalhar o ponto 1 x 0' }));
+    expect(panel().getByText(/Associe trilhas a atletas/)).toBeInTheDocument();
+  });
+
+  it('os resultados só ficam ativos depois de escolher o atleta', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    await ctx.user.click(points().getByRole('button', { name: 'Detalhar o ponto 1 x 0' }));
+    for (const button of within(panel().getByRole('group', { name: 'Resultado do fundamento' })).getAllByRole('button')) expect(button).toBeDisabled();
+  });
+
+  it('"Fechar" esconde o painel', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    await ctx.user.click(points().getByRole('button', { name: 'Detalhar o ponto 1 x 0' }));
+    await ctx.user.click(panel().getByRole('button', { name: 'Fechar' }));
+    expect(screen.queryByRole('region', { name: 'Detalhar o ponto' })).not.toBeInTheDocument();
+  });
+
+  it('partida concluída: explica e não deixa registrar', async () => {
+    const workspace = withPoints();
+    workspace.matches = workspace.matches.map((m) => (m.id === 'm1' ? { ...m, status: 'concluida' as const } : m));
+    const ctx = await open(workspace);
+    await loadBoth(ctx);
+    await ctx.user.click(points().getByRole('button', { name: 'Detalhar o ponto 1 x 0' }));
+    expect(panel().getByText(/Esta partida está concluída/)).toBeInTheDocument();
+    expect(panel().getByLabelText('Atleta')).toBeDisabled();
+  });
+});

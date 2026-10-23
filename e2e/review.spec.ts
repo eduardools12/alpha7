@@ -231,6 +231,21 @@ test.describe('associações e pontos da partida no desktop', () => {
     expect(await page.evaluate(() => (document.querySelector('video') as HTMLVideoElement).currentTime)).toBe(0); // 5 s antes cai antes do início
     await points.getByRole('button', { name: 'Limpar referência do set 1' }).click();
     await expect(points.getByRole('button', { name: 'Ir para o vídeo: ponto 2 x 1' })).toBeDisabled();
+
+    // Detalhar um ponto ANTIGO (o 1º de 3), com o vídeo parado: a ação entra nele e o placar não muda.
+    await points.getByRole('button', { name: 'Detalhar o ponto 1 x 0' }).click();
+    const panel = page.getByRole('region', { name: 'Detalhar o ponto' });
+    await expect(panel).toBeFocused();
+    await expect(panel.getByText('Nenhuma ação técnica registrada neste ponto.')).toBeVisible();
+    await panel.getByLabel('Atleta', { exact: true }).selectOption({ index: 1 });
+    await panel.getByLabel('Fundamento', { exact: true }).selectOption('ataque');
+    await panel.getByRole('button', { name: 'Ponto', exact: true }).click();
+    await expect(panel.getByText(/· Ataque: Ponto$/)).toBeVisible();
+    await expect(points.getByText('1 ação técnica')).toBeVisible();
+    await expect(points.getByText('2 x 1', { exact: true })).toBeVisible();
+    await page.reload(); // a ação foi gravada de verdade
+    await openFiles(page, (name) => testInfo.outputPath(name));
+    await expect(page.getByRole('region', { name: 'Pontos da partida' }).getByText('1 ação técnica')).toBeVisible();
   });
 });
 
@@ -263,6 +278,10 @@ for (const viewport of VIEWPORTS) {
         page.getByRole('button', { name: /^Ir para o vídeo: ponto 1 x 0/ }),
       ]) {
         expect((await target.boundingBox())?.height ?? 0, 'alvo de toque da revisão').toBeGreaterThanOrEqual(44);
+      }
+      await page.getByRole('button', { name: 'Detalhar o ponto 1 x 0' }).click();
+      for (const target of [page.getByLabel('Atleta', { exact: true }), page.getByLabel('Fundamento', { exact: true }), page.getByRole('button', { name: 'Fechar' })]) {
+        expect((await target.boundingBox())?.height ?? 0, 'alvo de toque do painel de detalhe').toBeGreaterThanOrEqual(44);
       }
       await seek(page, 1.0);
       expect((await overlayPixel(page, 140, 60)).rgba[3], 'caixa desenhada também no celular').toBeGreaterThan(100);

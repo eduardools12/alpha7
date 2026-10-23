@@ -17,6 +17,9 @@ interface Props {
   onMark(setNumber: number, rallyId: string): void;
   onClear(setNumber: number): void;
   onSeek(videoMs: number): void;
+  /** Ações técnicas ativas por ponto, para mostrar o que já foi detalhado. */
+  actionCounts: ReadonlyMap<string, number>;
+  onDetail(rallyId: string): void;
 }
 
 /**
@@ -24,7 +27,7 @@ interface Props {
  * são calculados pela diferença entre os horários em que foram REGISTRADOS (aproximado: o toque vem depois da jogada, por
  * isso "Ir para o vídeo" começa alguns segundos antes). Nada disso altera ponto, placar ou estatística.
  */
-export function ReviewPoints({ sets, review, enabled, videoOpen, playersById, onMark, onClear, onSeek }: Props) {
+export function ReviewPoints({ sets, review, enabled, videoOpen, playersById, onMark, onClear, onSeek, actionCounts, onDetail }: Props) {
   return (
     <section aria-label="Pontos da partida">
       <Card title="Pontos da partida">
@@ -61,6 +64,7 @@ export function ReviewPoints({ sets, review, enabled, videoOpen, playersById, on
                               <span className="tabular">{score}</span>
                               <span>{rallyDescription(rally, playersById)}</span>
                               {ms !== null && <span className={styles.muted}>{`Vídeo ${formatMs(ms)}`}</span>}
+                              {(actionCounts.get(rally.id) ?? 0) > 0 && <span className={styles.muted}>{`${actionCounts.get(rally.id)} ${actionCounts.get(rally.id) === 1 ? 'ação técnica' : 'ações técnicas'}`}</span>}
                             </div>
                             <div className={styles.group}>
                               <Button disabled={!enabled} onClick={() => onMark(s.set.number, rally.id)}>
@@ -69,6 +73,7 @@ export function ReviewPoints({ sets, review, enabled, videoOpen, playersById, on
                               <Button disabled={!enabled || ms === null} onClick={() => ms !== null && onSeek(ms)}>
                                 {`Ir para o vídeo: ponto ${score}`}
                               </Button>
+                              <Button onClick={() => onDetail(rally.id)}>{`Detalhar o ponto ${score}`}</Button>
                             </div>
                           </li>
                         );

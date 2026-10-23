@@ -9,6 +9,7 @@ import {
   reviewKey,
   seekTarget,
   serializeReview,
+  suggestedAthletes,
   setSync,
   syncedVideoMs,
   type ReviewData,
@@ -189,5 +190,19 @@ describe('reviewFilename', () => {
   it('adversário vazio ou só símbolos vira "partida"; nomes enormes são cortados', () => {
     expect(reviewFilename('???', now)).toBe('alpha7-revisao-partida-2026-10-23.json');
     expect(reviewFilename('a'.repeat(200), now).length).toBeLessThan(80);
+  });
+});
+
+describe('suggestedAthletes', () => {
+  const roster = new Set(['p1', 'p2']);
+  const data = () => assignTrack(assignTrack(assignTrack(fresh(), 1, 'p1'), 7, 'p1'), 2, 'p2');
+
+  it('devolve os atletas das trilhas visíveis, sem repetir, na ordem das trilhas', () => {
+    expect(suggestedAthletes(data(), [2, 1, 7], roster)).toEqual(['p2', 'p1']);
+  });
+
+  it('ignora trilha sem atleta e atleta que saiu do elenco', () => {
+    expect(suggestedAthletes(data(), [99, 1], new Set(['p2']))).toEqual([]);
+    expect(suggestedAthletes(data(), [], roster)).toEqual([]);
   });
 });

@@ -8,10 +8,12 @@ import { Notice } from '@/components/ui/Notice';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { downloadTextFile } from '@/data/download';
 import { useWorkspace } from '@/data/WorkspaceProvider';
+import { runningScores } from '../rallyText';
 import { shortName } from '@/domain/player';
 import { boxesAt, compareWithVideo, formatMs, isWithinAnalysis, parseVideoAnalysis, type VideoAnalysis, type VideoFacts } from '@/domain/videoReview';
-import { assignTrack, clearSync, duplicatedAthletes, parseReviewFile, reviewFilename, seekTarget, serializeReview, setSync } from '@/domain/videoReviewData';
+import { assignTrack, clearSync, duplicatedAthletes, parseReviewFile, reviewFilename, seekTarget, serializeReview, setSync, suggestedAthletes } from '@/domain/videoReviewData';
 import { drawBoxes } from './reviewCanvas';
+import { ReviewDetail } from './ReviewDetail';
 import { ReviewPoints } from './ReviewPoints';
 import { stateFor } from '../matchView';
 import { useReviewData } from './useReviewData';
@@ -45,6 +47,7 @@ export function MatchReviewPage() {
   const [outside, setOutside] = useState(false);
   /** Trilhas com caixa no quadro atual, como texto "1,2" (estado simples: só re-renderiza quando muda). */
   const [visibleKey, setVisibleKey] = useState('');
+  const [detailRallyId, setDetailRallyId] = useState<string | null>(null);
   /** Resultado da última importação de associações: pontos e itens ignorados, ou o motivo da recusa. */
   const [importResult, setImportResult] = useState<{ ok: true; lines: string[] } | { ok: false; problems: string[] } | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -150,6 +153,24 @@ export function MatchReviewPage() {
   }, [review, visibleKey, playerLabels]);
   const matchState = useMemo(() => (match ? stateFor(match, data.matchSets, data.rallies) : null), [match, data.matchSets, data.rallies]);
   const playersById = useMemo(() => new Map(data.players.map((p) => [p.id, p])), [data.players]);
+  const actionCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const a of data.rallyActions) if (a.voidedAt === null) counts.set(a.rallyId, (counts.get(a.rallyId) ?? 0) + 1);
+    return counts;
+  }, [data.rallyActions]);
+  /** Ponto aberto para detalhar: some se foi desfeito ou a partida mudou. */
+  const detail = useMemo(() => {
+    for (const s of matchState?.sets ?? []) {
+      const rally = s.rallies.find((r) => r.id === detailRallyId);
+      if (rally) return { rally, score: runningScores(s.rallies).get(rally.id) ?? '' };
+    }
+    return null;
+  }, [matchState, detailRallyId]);
+  const suggested = useMemo(() => {
+    if (!review) return [];
+    const visibleIds = visibleKey === '' ? [] : visibleKey.split(',').map(Number);
+    return suggestedAthletes(review, visibleIds, new Set(playerLabels.keys()));
+  }, [review, visibleKey, playerLabels]);
   const tracks = useMemo(() => (analysis ? [...analysis.tracks].sort((a, b) => a.firstMs - b.firstMs || a.trackId - b.trackId) : []), [analysis]);
 
   if (!match) {
@@ -465,6 +486,18 @@ export function MatchReviewPage() {
                 {ready && <p className={styles.muted}>Importar substitui as associações e as referências de ponto desta tela.</p>}
               </Card>
             </section>
+            {detail && (
+              <ReviewDetail
+                match={match}
+                rally={detail.rally}
+                score={detail.score}
+                roster={roster}
+                playerLabels={playerLabels}
+                playersById={playersById}
+                suggested={suggested}
+                onClose={() => setDetailRallyId(null)}
+              />
+            )}
             {matchState && (
               <ReviewPoints
                 sets={matchState.sets}
@@ -475,6 +508,8 @@ export function MatchReviewPage() {
                 onMark={onMark}
                 onClear={onClearSync}
                 onSeek={(videoMs) => seek(seekTarget(videoMs))}
+                actionCounts={actionCounts}
+                onDetail={setDetailRallyId}
               />
             )}
           </aside>
