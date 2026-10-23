@@ -1,0 +1,141 @@
+.pickers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s-3);
+}
+
+@media (min-width: 40rem) {
+  .pickers {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.picker {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--s-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.picker input {
+  width: 100%;
+  min-width: 0;
+  min-height: 2.75rem;
+  padding: var(--s-2);
+  background: var(--bg-sunken);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--r-sm);
+  color: var(--text);
+  font: inherit;
+  font-weight: 500;
+}
+
+.muted {
+  color: var(--text-muted);
+  font-size: var(--fs-sm);
+  text-wrap: pretty;
+}
+
+.problems {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-1);
+  margin: 0 0 var(--s-2);
+  padding-left: var(--s-4);
+  list-style: disc;
+}
+
+.layout {
+  display: grid;
+  gap: var(--s-4);
+  align-items: start;
+}
+
+@media (min-width: 64rem) {
+  .layout:has(.side) {
+    grid-template-columns: minmax(0, 1fr) 20rem;
+  }
+}
+
+.main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  min-width: 0;
+}
+
+.stage {
+  position: relative;
+  width: 100%;
+  background: var(--bg-sunken);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.stage video {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* O canvas cobre o vídeo e deixa os controles do vídeo clicáveis. */
+.overlay {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-3) var(--s-4);
+}
+
+.group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-2);
+  min-height: 2.75rem;
+  font-size: var(--fs-sm);
+}
+
+.check input {
+  width: 1.25rem;
+  height: 1.25rem;
+  accent-color: var(--a7-lilac-300);
+}
+
+.side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-4);
+  min-width: 0;
+}
+
+.tracks {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-2);
+  max-height: 24rem;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.tracks button {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+}
