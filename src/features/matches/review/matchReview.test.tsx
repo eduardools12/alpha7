@@ -2,8 +2,15 @@ import { act, fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyWorkspace } from '@/data/demo';
 import type { Workspace } from '@/data/types';
-import { makeMatch } from '@/test/factories';
+import { createMemoryReviewStore, setReviewStoreForTests, type ReviewStore } from '@/data/reviewStore';
+import { parseVideoAnalysis } from '@/domain/videoReview';
+import { assignTrack, emptyReview, reviewKey } from '@/domain/videoReviewData';
+import { downloadTextFile } from '@/data/download';
+import { REVIEW_SCHEMA } from '@/domain/videoReviewData';
+import { makeMatch, makeMatchSet, makePlayer, makeRally } from '@/test/factories';
 import { renderApp } from '@/test/renderApp';
+
+vi.mock('@/data/download', () => ({ downloadTextFile: vi.fn() }));
 import { renderRemote } from '@/test/renderRemote';
 import { TEAM_A, USERS, newFake, seedTeam, seedWorkspace } from '@/test/remoteFixtures';
 
@@ -31,19 +38,46 @@ const analysisJson = (overrides: Record<string, unknown> = {}) =>
   });
 
 const jsonFile = (text = analysisJson()) => new File([text], 'jogo.analysis.json', { type: 'application/json' });
-const videoFile = (name = 'jogo.mp4', size = 1000) => new File([new Uint8Array(size)], name, { type: 'video/mp4' });
+const LAST_MODIFIED = 1_700_000_000_000;
+const videoFile = (name = 'jogo.mp4', size = 1000) => new File([new Uint8Array(size)], name, { type: 'video/mp4', lastModified: LAST_MODIFIED });
 
-const world = (): Workspace => ({ ...createEmptyWorkspace(), matches: [makeMatch({ id: 'm1', opponent: 'Rivais' })] });
+const PLAYERS = [makePlayer({ id: 'p1', name: 'Ana Alves', jerseyNumber: 1 }), makePlayer({ id: 'p2', name: 'Bia Borges', jerseyNumber: 2 })];
+const RALLIES = [
+  makeRally('m1', 1, 1, { id: 'rA', winnerSide: 'us', reason: 'ace', playerId: 'p1', recordedAt: '2026-10-01T10:00:00.000Z' }),
+  makeRally('m1', 1, 2, { id: 'rB', winnerSide: 'them', recordedAt: '2026-10-01T10:00:40.000Z' }),
+  makeRally('m1', 1, 3, { id: 'rC', winnerSide: 'us', recordedAt: '2026-10-01T10:01:30.000Z' }),
+  makeRally('m1', 1, 4, { id: 'rD', winnerSide: 'us', recordedAt: '2026-10-01T10:02:00.000Z', voidedAt: '2026-10-01T10:02:10.000Z' }),
+];
+const withPoints = (): Workspace => {
+  const extra = ['p3', 'p4', 'p5', 'p6'].map((id, i) => makePlayer({ id, name: `Reserva ${id}`, jerseyNumber: 10 + i }));
+  return { ...world(), players: [...PLAYERS, ...extra], matchSets: [makeMatchSet('m1', 1, ['p1', 'p2', 'p3', 'p4', 'p5', 'p6'])], rallies: RALLIES };
+};
+const world = (): Workspace => ({ ...createEmptyWorkspace(), players: PLAYERS, matches: [makeMatch({ id: 'm1', opponent: 'Rivais' }), makeMatch({ id: 'm2', opponent: 'Outros' })] });
+
+/** Armazenamento de teste: se comporta como o IndexedDB (persistente), mas em memória. */
+const persistentStore = (): ReviewStore => ({ ...createMemoryReviewStore(), persistent: true });
+
+const analysisId = () => {
+  const result = parseVideoAnalysis(analysisJson());
+  if (!result.ok) throw new Error('análise de teste inválida');
+  return result.value.id;
+};
+const keyFor = (matchId = 'm1', name = 'jogo.mp4') => reviewKey(emptyReview(matchId, { name, size: 1000, lastModified: LAST_MODIFIED }, analysisId()));
 
 /** O jsdom não toca vídeo nem desenha canvas: estes fatos e o contexto de desenho são simulados. */
 const media = { videoWidth: 848, videoHeight: 478, duration: 10, clientWidth: 424 };
 const strokes: number[][] = [];
+const texts: string[] = [];
+let store: ReviewStore = createMemoryReviewStore();
 let urlCount = 0;
 
 beforeEach(() => {
   Object.assign(media, { videoWidth: 848, videoHeight: 478, duration: 10, clientWidth: 424 });
   strokes.length = 0;
+  texts.length = 0;
   urlCount = 0;
+  store = persistentStore();
+  setReviewStoreForTests(store);
   for (const key of ['videoWidth', 'videoHeight', 'duration'] as const) {
     Object.defineProperty(HTMLMediaElement.prototype, key, { configurable: true, get: () => media[key] });
   }
@@ -57,7 +91,7 @@ beforeEach(() => {
     clearRect: vi.fn(),
     strokeRect: vi.fn((x: number, y: number, w: number, h: number) => void strokes.push([x, y, w, h])),
     fillRect: vi.fn(),
-    fillText: vi.fn(),
+    fillText: vi.fn((text: string) => void texts.push(text)),
     measureText: () => ({ width: 10 }),
     setLineDash: vi.fn(),
   };
@@ -66,10 +100,13 @@ beforeEach(() => {
   vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined);
 });
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  setReviewStoreForTests(null);
+});
 
-async function open(workspace: Workspace = world()) {
-  const ctx = renderApp({ path: '/partidas/m1/revisao', workspace });
+async function open(workspace: Workspace = world(), matchId = 'm1') {
+  const ctx = renderApp({ path: `/partidas/${matchId}/revisao`, workspace });
   await screen.findByRole('heading', { level: 1, name: 'Revisão com vídeo' });
   return ctx;
 }
@@ -275,3 +312,305 @@ describe('Revisão com vídeo: papéis (cliente simulado)', () => {
     expect(screen.queryByLabelText('Vídeo do jogo')).not.toBeInTheDocument();
   });
 });
+
+describe('Revisão com vídeo: associar trilhas a atletas', () => {
+  const trackSelect = (n: number) => screen.getByLabelText(`Atleta da trilha T${n}`) as HTMLSelectElement;
+
+  it('cada trilha ganha um seletor com "Sem atleta" e o elenco por camisa', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    const options = within(trackSelect(1)).getAllByRole('option').map((o) => o.textContent);
+    expect(options).toEqual(['Sem atleta', 'Ana A. #1', 'Bia B. #2']);
+    expect(trackSelect(1)).toHaveValue('');
+  });
+
+  it('escolher o atleta guarda no armazenamento e mostra o nome na lista de trilhas e na caixa desenhada', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    texts.length = 0;
+    await ctx.user.selectOptions(trackSelect(1), 'p1');
+    await waitFor(async () => expect((await store.load(keyFor()))?.assignments).toEqual({ 1: 'p1' }));
+    expect(screen.getByRole('button', { name: /^T1 · Ana A\. #1 · 0:00 a 0:00/ })).toBeInTheDocument();
+    expect(texts).toContain('Ana A. #1');
+    expect(texts).toContain('T2'); // quem não tem atleta segue com o número temporário
+  });
+
+  it('"Sem atleta" remove a associação', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(1), 'p1');
+    await ctx.user.selectOptions(trackSelect(1), '');
+    await waitFor(async () => expect((await store.load(keyFor()))?.assignments).toEqual({}));
+    expect(trackSelect(1)).toHaveValue('');
+  });
+
+  it('o mesmo atleta em duas caixas ao mesmo tempo gera aviso, que some quando só uma está visível', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(1), 'p1');
+    await ctx.user.selectOptions(trackSelect(2), 'p1');
+    videoElement().currentTime = 0;
+    act(() => void fireEvent.seeked(videoElement()));
+    expect(await screen.findByText(/Ana A\. #1 está em duas caixas ao mesmo tempo/)).toBeInTheDocument();
+    videoElement().currentTime = 0.15; // só T1 continua visível
+    act(() => void fireEvent.seeked(videoElement()));
+    await waitFor(() => expect(screen.queryByText(/está em duas caixas ao mesmo tempo/)).not.toBeInTheDocument());
+  });
+
+  it('abrir de novo o mesmo vídeo e a mesma análise restaura as associações', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(1), 'p2');
+    await waitFor(async () => expect(await store.load(keyFor())).not.toBeNull());
+    ctx.unmount();
+    const again = await open();
+    await loadBoth(again);
+    await waitFor(() => expect(trackSelect(1)).toHaveValue('p2'));
+  });
+
+  it('outro vídeo ou outra análise NÃO recebe as associações salvas', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(1), 'p1');
+    await waitFor(async () => expect(await store.load(keyFor())).not.toBeNull());
+    ctx.unmount();
+
+    const otherVideo = await open();
+    await otherVideo.user.upload(screen.getByLabelText('Vídeo do jogo'), videoFile('outro.mp4'));
+    await otherVideo.user.upload(screen.getByLabelText('Análise (.json)'), jsonFile());
+    await screen.findByText(/quadros analisados/);
+    expect(trackSelect(1)).toHaveValue('');
+    otherVideo.unmount();
+
+    const otherAnalysis = await open();
+    await loadBoth(otherAnalysis, analysisJson({ source: { filename: 'jogo.mp4', size_bytes: 1000, width: 848, height: 478, fps: 30, duration_s: 11 } }));
+    expect(trackSelect(1)).toHaveValue('');
+  });
+
+  it('não vaza para outra partida', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(1), 'p1');
+    await waitFor(async () => expect(await store.load(keyFor('m1'))).not.toBeNull());
+    ctx.unmount();
+    const other = await open(world(), 'm2');
+    await loadBoth(other);
+    expect(trackSelect(1)).toHaveValue('');
+  });
+
+  it('atleta que saiu do elenco: a trilha volta a "Sem atleta", sem erro', async () => {
+    await store.save(keyFor(), assignTrack(emptyReview('m1', { name: 'jogo.mp4', size: 1000, lastModified: LAST_MODIFIED }, analysisId()), 1, 'saiu-do-elenco'));
+    const ctx = await open();
+    await loadBoth(ctx);
+    await waitFor(() => expect(trackSelect(1)).toHaveValue(''));
+    expect(screen.getByRole('button', { name: /^T1 · 0:00 a 0:00/ })).toBeInTheDocument();
+  });
+
+  it('armazenamento que falha ao salvar: a tela segue, avisa e mantém a associação em memória', async () => {
+    store = { persistent: true, load: () => Promise.resolve(null), save: () => Promise.reject(new Error('cheio')) };
+    setReviewStoreForTests(store);
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(1), 'p1');
+    expect(await screen.findByText(/Não foi possível guardar as associações neste navegador/)).toBeInTheDocument();
+    expect(trackSelect(1)).toHaveValue('p1');
+    expect(screen.getByText(/Exportar associações/, { selector: 'button' })).toBeInTheDocument();
+  });
+
+  it('armazenamento que falha ao ler: começa vazio e avisa, sem quebrar', async () => {
+    store = { persistent: true, load: () => Promise.reject(new Error('bloqueado')), save: () => Promise.resolve() };
+    setReviewStoreForTests(store);
+    const ctx = await open();
+    await loadBoth(ctx);
+    expect(await screen.findByText(/Não foi possível ler as associações guardadas/)).toBeInTheDocument();
+    expect(trackSelect(1)).toHaveValue('');
+  });
+
+  it('armazenamento sem persistência (navegação privada) avisa que nada fica guardado ao fechar a aba', async () => {
+    setReviewStoreForTests(createMemoryReviewStore());
+    const ctx = await open();
+    await loadBoth(ctx);
+    expect(await screen.findByText(/não ficam guardadas quando a aba é fechada/)).toBeInTheDocument();
+  });
+
+  it('sem o vídeo aberto, os seletores ficam desabilitados e dizem por quê', async () => {
+    const ctx = await open();
+    await ctx.user.upload(screen.getByLabelText('Análise (.json)'), jsonFile());
+    await screen.findByText(/quadros analisados/);
+    expect(trackSelect(1)).toBeDisabled();
+    expect(screen.getByText(/Abra o vídeo do jogo para associar atletas/)).toBeInTheDocument();
+  });
+
+  it('clicar numa caixa pausa o vídeo e leva o foco ao seletor daquela trilha', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    const stage = videoElement().parentElement as HTMLElement;
+    vi.spyOn(stage, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 424, height: 239, right: 424, bottom: 239, x: 0, y: 0, toJSON: () => ({}) });
+    videoElement().currentTime = 0;
+    (HTMLMediaElement.prototype.pause as unknown as ReturnType<typeof vi.fn>).mockClear();
+    fireEvent.click(stage, { clientX: 15, clientY: 30 }); // dentro da caixa de T1: [5, 10, 30, 60] na tela
+    expect(HTMLMediaElement.prototype.pause).toHaveBeenCalled();
+    await waitFor(() => expect(trackSelect(1)).toHaveFocus());
+    fireEvent.click(stage, { clientX: 200, clientY: 150 }); // fora de qualquer caixa: nada muda
+    expect(trackSelect(1)).toHaveFocus();
+  });
+
+  it('clique na faixa dos controles do vídeo não escolhe trilha', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    const stage = videoElement().parentElement as HTMLElement;
+    vi.spyOn(stage, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, width: 424, height: 60, right: 424, bottom: 60, x: 0, y: 0, toJSON: () => ({}) });
+    (HTMLMediaElement.prototype.pause as unknown as ReturnType<typeof vi.fn>).mockClear();
+    fireEvent.click(stage, { clientX: 15, clientY: 30 });
+    expect(HTMLMediaElement.prototype.pause).not.toHaveBeenCalled();
+  });
+});
+
+describe('Revisão com vídeo: exportar e importar associações', () => {
+  const trackSelect = (n: number) => screen.getByLabelText(`Atleta da trilha T${n}`) as HTMLSelectElement;
+  const fileOf = (data: unknown) => new File([JSON.stringify(data)], 'revisao.json', { type: 'application/json' });
+  const exported = () => {
+    const calls = vi.mocked(downloadTextFile).mock.calls;
+    const call = calls[calls.length - 1];
+    if (!call) throw new Error('nada foi exportado');
+    return { filename: call[0], data: JSON.parse(call[1]) as Record<string, unknown> };
+  };
+  const base = (extra: Record<string, unknown> = {}) => ({
+    schema_version: REVIEW_SCHEMA,
+    exported_at: '2026-10-23T12:00:00.000Z',
+    match_id: 'm1',
+    analysis_id: analysisId(),
+    video: { name: 'jogo.mp4', size: 1000, last_modified: LAST_MODIFIED },
+    assignments: [{ track_id: 1, player_id: 'p1' }],
+    syncs: [],
+    ...extra,
+  });
+
+  beforeEach(() => vi.mocked(downloadTextFile).mockClear());
+
+  it('exporta um arquivo com o nome da partida e o conteúdo das associações', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(2), 'p2');
+    await ctx.user.click(screen.getByRole('button', { name: 'Exportar associações' }));
+    const { filename, data } = exported();
+    expect(filename).toMatch(/^alpha7-revisao-rivais-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(data.schema_version).toBe(REVIEW_SCHEMA);
+    expect(data.match_id).toBe('m1');
+    expect(data.assignments).toEqual([{ track_id: 2, player_id: 'p2' }]);
+  });
+
+  it('importar um arquivo válido substitui as associações e conta o que entrou e o que foi ignorado', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(2), 'p2');
+    const file = fileOf(base({ assignments: [{ track_id: 1, player_id: 'p1' }, { track_id: 99, player_id: 'p1' }] }));
+    await ctx.user.upload(screen.getByLabelText('Importar associações (.json)'), file);
+    expect(await screen.findByText(/1 associação importada/)).toBeInTheDocument();
+    expect(screen.getByText(/1 item ignorado/)).toBeInTheDocument();
+    expect(trackSelect(1)).toHaveValue('p1');
+    expect(trackSelect(2)).toHaveValue(''); // substituiu, não mesclou
+    await waitFor(async () => expect((await store.load(keyFor()))?.assignments).toEqual({ 1: 'p1' }));
+  });
+
+  it('arquivo de outra partida, de outra análise ou quebrado: explica o motivo e não altera nada', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    await ctx.user.selectOptions(trackSelect(1), 'p2');
+    const input = screen.getByLabelText('Importar associações (.json)');
+    await ctx.user.upload(input, fileOf(base({ match_id: 'm9' })));
+    expect(await screen.findByText(/Este arquivo é de outra partida/)).toBeInTheDocument();
+    await ctx.user.upload(input, fileOf(base({ analysis_id: 'zzz-1' })));
+    expect(await screen.findByText(/outra análise de vídeo/)).toBeInTheDocument();
+    await ctx.user.upload(input, new File(['{quebrado'], 'x.json', { type: 'application/json' }));
+    expect(await screen.findByText(/não é um JSON válido/)).toBeInTheDocument();
+    expect(screen.getByText(/Nada foi alterado/)).toBeInTheDocument();
+    expect(trackSelect(1)).toHaveValue('p2');
+    expect((await store.load(keyFor()))?.assignments).toEqual({ 1: 'p2' });
+  });
+
+  it('sem o vídeo e a análise abertos, não há campo de importar', async () => {
+    await open();
+    expect(screen.queryByLabelText('Importar associações (.json)')).not.toBeInTheDocument();
+  });
+});
+
+describe('Revisão com vídeo: pontos da partida e o instante do vídeo', () => {
+  const trackSelectFor = () => screen.getByRole('region', { name: 'Pontos da partida' });
+  const points = () => within(trackSelectFor());
+
+  it('lista os pontos ATIVOS por set, com placar e descrição, sem os anulados', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    expect(points().getByText('Set 1')).toBeInTheDocument();
+    expect(points().getByText('1 x 0')).toBeInTheDocument();
+    expect(points().getByText('1 x 1')).toBeInTheDocument();
+    expect(points().getByText('2 x 1')).toBeInTheDocument();
+    expect(points().queryByText('3 x 1')).not.toBeInTheDocument(); // rD foi anulado
+    expect(points().getByText(/Alpha7 · Ace · Ana A\. #1/)).toBeInTheDocument();
+  });
+
+  it('sem pontos na partida, a lista diz isso em vez de ficar vazia', async () => {
+    const ctx = await open();
+    await loadBoth(ctx);
+    expect(points().getByText(/Esta partida ainda não tem pontos registrados/)).toBeInTheDocument();
+  });
+
+  it('sem referência, "Ir para o vídeo" fica desabilitado e a lista diz como começar', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    for (const button of points().getAllByRole('button', { name: /^Ir para o vídeo/ })) expect(button).toBeDisabled();
+    expect(points().getAllByText(/Marque no vídeo o instante de um ponto/).length).toBeGreaterThan(0);
+  });
+
+  it('marcar o ponto no instante atual calcula os outros pelo horário do registro; ir ao vídeo volta 5 s antes', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    videoElement().currentTime = 100; // o ponto rB (10:00:40) aconteceu em 1:40 do vídeo
+    await ctx.user.click(points().getByRole('button', { name: 'Marcar o ponto 1 x 1 no instante atual' }));
+    await waitFor(async () => expect((await store.load(keyFor()))?.syncs).toEqual({ 1: { rallyId: 'rB', videoMs: 100_000 } }));
+    // rA = 40 s antes; rC = 50 s depois
+    expect(points().getByText('Vídeo 1:00')).toBeInTheDocument();
+    expect(points().getByText('Vídeo 1:40')).toBeInTheDocument();
+    expect(points().getByText('Vídeo 2:30')).toBeInTheDocument();
+    await ctx.user.click(points().getByRole('button', { name: 'Ir para o vídeo: ponto 2 x 1' }));
+    expect(videoElement().currentTime).toBeCloseTo(145, 2); // 150 s - 5 s
+  });
+
+  it('não volta antes do início do vídeo', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    videoElement().currentTime = 3;
+    await ctx.user.click(points().getByRole('button', { name: 'Marcar o ponto 1 x 0 no instante atual' }));
+    await ctx.user.click(points().getByRole('button', { name: 'Ir para o vídeo: ponto 1 x 0' }));
+    expect(videoElement().currentTime).toBe(0);
+  });
+
+  it('"Limpar referência do set" remove só a referência daquele set', async () => {
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    videoElement().currentTime = 50;
+    await ctx.user.click(points().getByRole('button', { name: 'Marcar o ponto 1 x 0 no instante atual' }));
+    await waitFor(async () => expect((await store.load(keyFor()))?.syncs[1]).toBeDefined());
+    await ctx.user.click(points().getByRole('button', { name: 'Limpar referência do set 1' }));
+    await waitFor(async () => expect((await store.load(keyFor()))?.syncs).toEqual({}));
+    for (const button of points().getAllByRole('button', { name: /^Ir para o vídeo/ })) expect(button).toBeDisabled();
+  });
+
+  it('referência de um ponto que foi anulado depois: some do cálculo e a lista volta a pedir uma nova', async () => {
+    await store.save(keyFor(), { ...emptyReview('m1', { name: 'jogo.mp4', size: 1000, lastModified: LAST_MODIFIED }, analysisId()), syncs: { 1: { rallyId: 'rD', videoMs: 90_000 } } });
+    const ctx = await open(withPoints());
+    await loadBoth(ctx);
+    await waitFor(() => expect(points().getAllByText(/Marque no vídeo o instante de um ponto/).length).toBeGreaterThan(0));
+    for (const button of points().getAllByRole('button', { name: /^Ir para o vídeo/ })) expect(button).toBeDisabled();
+  });
+
+  it('sem o vídeo aberto não dá para marcar nem ir; a lista diz por quê', async () => {
+    const ctx = await open(withPoints());
+    await ctx.user.upload(screen.getByLabelText('Análise (.json)'), jsonFile());
+    await screen.findByText(/quadros analisados/);
+    for (const button of points().getAllByRole('button', { name: /no instante atual$/ })) expect(button).toBeDisabled();
+    expect(points().getByText(/Abra o vídeo do jogo para ligar os pontos ao vídeo/)).toBeInTheDocument();
+  });
+});
+

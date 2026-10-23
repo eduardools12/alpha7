@@ -32,6 +32,8 @@ export interface TrackBox {
 }
 
 export interface VideoAnalysis {
+  /** Impressão do conteúdo do arquivo lido: identifica ESTA análise (os números de trilha mudam a cada análise nova). */
+  id: string;
   source: { filename: string; sizeBytes: number | null; width: number; height: number; fps: number; durationS: number | null };
   frames: { timestampMs: number; boxes: TrackBox[] }[];
   tracks: { trackId: number; firstMs: number; lastMs: number; detections: number }[];
@@ -44,6 +46,16 @@ export type ParseResult = { ok: true; value: VideoAnalysis } | { ok: false; prob
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isNumber = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value);
 const isInt = (value: unknown): value is number => isNumber(value) && Number.isInteger(value);
+
+/** Impressão do texto (FNV-1a de 32 bits em hexadecimal + tamanho). Serve para reconhecer a mesma análise, não é um selo de segurança. */
+function contentId(text: string): string {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return `${(hash >>> 0).toString(16).padStart(8, '0')}-${text.length}`;
+}
 
 export function parseVideoAnalysis(text: string, limits: Partial<ParseLimits> = {}): ParseResult {
   const max = { ...DEFAULT_LIMITS, ...limits };
@@ -171,7 +183,7 @@ export function parseVideoAnalysis(text: string, limits: Partial<ParseLimits> = 
   if (problems.length > 0 || source === null || frames.length === 0) return fail();
   return {
     ok: true,
-    value: { source, frames, tracks, analyzedFromMs: frames[0]?.timestampMs ?? 0, analyzedToMs: frames[frames.length - 1]?.timestampMs ?? 0 },
+    value: { id: contentId(text), source, frames, tracks, analyzedFromMs: frames[0]?.timestampMs ?? 0, analyzedToMs: frames[frames.length - 1]?.timestampMs ?? 0 },
   };
 }
 

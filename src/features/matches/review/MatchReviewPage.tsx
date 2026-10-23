@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type MouseEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { PATHS } from '@/app/routes';
 import { Button, ButtonLink } from '@/components/ui/Button';
@@ -6,9 +6,15 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Notice } from '@/components/ui/Notice';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { downloadTextFile } from '@/data/download';
 import { useWorkspace } from '@/data/WorkspaceProvider';
+import { shortName } from '@/domain/player';
 import { boxesAt, compareWithVideo, formatMs, isWithinAnalysis, parseVideoAnalysis, type VideoAnalysis, type VideoFacts } from '@/domain/videoReview';
+import { assignTrack, clearSync, duplicatedAthletes, parseReviewFile, reviewFilename, seekTarget, serializeReview, setSync } from '@/domain/videoReviewData';
 import { drawBoxes } from './reviewCanvas';
+import { ReviewPoints } from './ReviewPoints';
+import { stateFor } from '../matchView';
+import { useReviewData } from './useReviewData';
 import styles from './MatchReviewPage.module.css';
 
 const SPEEDS = [0.25, 0.5, 1, 2] as const;
@@ -16,6 +22,8 @@ const speedLabel = (speed: number) => `${String(speed).replace('.', ',')}x`;
 /** Lista de trilhas: mostra no máximo isto (uma análise longa pode ter milhares). */
 const MAX_TRACKS_SHOWN = 300;
 const DEFAULT_FPS = 30;
+/** Faixa de baixo do vídeo onde ficam os controles nativos: clique ali não escolhe trilha. */
+const CONTROLS_STRIP_PX = 48;
 
 /**
  * Revisão com vídeo (somente leitura): toca o vídeo do jogo, que fica no computador (nada é enviado), e desenha por cima as
@@ -35,9 +43,30 @@ export function MatchReviewPage() {
   const [showBoxes, setShowBoxes] = useState(true);
   const [speed, setSpeed] = useState<number>(1);
   const [outside, setOutside] = useState(false);
+  /** Trilhas com caixa no quadro atual, como texto "1,2" (estado simples: só re-renderiza quando muda). */
+  const [visibleKey, setVisibleKey] = useState('');
+  /** Resultado da última importação de associações: pontos e itens ignorados, ou o motivo da recusa. */
+  const [importResult, setImportResult] = useState<{ ok: true; lines: string[] } | { ok: false; problems: string[] } | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const analysisRequest = useRef(0);
+  const sideRef = useRef<HTMLElement | null>(null);
+  const reviewState = useReviewData(matchId, videoFile, analysis);
+  const { review, ready } = reviewState;
+
+  const roster = useMemo(() => [...data.players].sort((a, b) => a.jerseyNumber - b.jerseyNumber || a.name.localeCompare(b.name, 'pt-BR')), [data.players]);
+  const playerLabels = useMemo(() => new Map(roster.map((p) => [p.id, `${shortName(p.name)} #${p.jerseyNumber}`])), [roster]);
+  /** Trilha → texto do atleta associado (some se o atleta saiu do elenco: a trilha volta a "Sem atleta"). */
+  const trackLabels = useMemo(() => {
+    const labels = new Map<number, string>();
+    if (review) {
+      for (const [track, playerId] of Object.entries(review.assignments)) {
+        const label = playerLabels.get(playerId);
+        if (label) labels.set(Number(track), label);
+      }
+    }
+    return labels;
+  }, [review, playerLabels]);
 
   // URL do vídeo: criada ao escolher o arquivo e SEMPRE revogada ao trocar ou sair (nada fica retido na memória).
   useEffect(() => {
@@ -69,12 +98,18 @@ export function MatchReviewPage() {
         canvas.height = height;
       }
       ctx.clearRect(0, 0, width, height);
-      if (!analysis) return;
+      if (!analysis) {
+        setVisibleKey('');
+        return;
+      }
       const nowMs = video.currentTime * 1000;
       const out = !isWithinAnalysis(analysis, nowMs);
       setOutside((previous) => (previous === out ? previous : out)); // só re-renderiza quando muda
+      const boxes = boxesAt(analysis, nowMs);
+      const visible = boxes.flatMap((box) => (box.trackId === null ? [] : [box.trackId])).sort((a, b) => a - b).join(',');
+      setVisibleKey((previous) => (previous === visible ? previous : visible));
       if (!showBoxes) return;
-      drawBoxes(ctx, boxesAt(analysis, nowMs), width / analysis.source.width);
+      drawBoxes(ctx, boxes, width / analysis.source.width, (trackId) => trackLabels.get(trackId));
     };
     const frameCallback = typeof video.requestVideoFrameCallback === 'function'; // Chrome e Safari; no Firefox cai para requestAnimationFrame
     const loop = () => {
@@ -102,9 +137,19 @@ export function MatchReviewPage() {
         else cancelAnimationFrame(handle);
       }
     };
-  }, [analysis, showBoxes, videoUrl]);
+  }, [analysis, showBoxes, videoUrl, trackLabels]);
 
   const warnings = useMemo(() => (analysis && videoFacts ? compareWithVideo(analysis.source, videoFacts) : []), [analysis, videoFacts]);
+  const repeated = useMemo(() => {
+    if (!review) return [];
+    const visibleIds = visibleKey === '' ? [] : visibleKey.split(',').map(Number);
+    return duplicatedAthletes(review, visibleIds).flatMap((id) => {
+      const label = playerLabels.get(id);
+      return label ? [label] : [];
+    });
+  }, [review, visibleKey, playerLabels]);
+  const matchState = useMemo(() => (match ? stateFor(match, data.matchSets, data.rallies) : null), [match, data.matchSets, data.rallies]);
+  const playersById = useMemo(() => new Map(data.players.map((p) => [p.id, p])), [data.players]);
   const tracks = useMemo(() => (analysis ? [...analysis.tracks].sort((a, b) => a.firstMs - b.firstMs || a.trackId - b.trackId) : []), [analysis]);
 
   if (!match) {
@@ -140,6 +185,67 @@ export function MatchReviewPage() {
       setAnalysis(null);
       setProblems(result.problems);
     }
+  };
+
+  const onClearSync = (setNumber: number) => reviewState.update((current) => clearSync(current, setNumber));
+
+  const onAthlete = (trackId: number, playerId: string) => reviewState.update((current) => assignTrack(current, trackId, playerId === '' ? null : playerId));
+
+  const onExport = () => {
+    if (!review) return;
+    const now = new Date();
+    downloadTextFile(reviewFilename(match.opponent, now), serializeReview(review, now));
+  };
+
+  const onImport = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.target;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file || !analysis) return;
+    const text = await file.text();
+    const result = parseReviewFile(text, {
+      matchId: match.id,
+      analysisId: analysis.id,
+      trackIds: new Set(analysis.tracks.map((t) => t.trackId)),
+      playerIds: new Set(data.players.map((p) => p.id)),
+      rallyIds: new Set(data.rallies.filter((r) => r.matchId === match.id).map((r) => r.id)),
+    });
+    if (!result.ok) {
+      setImportResult({ ok: false, problems: result.problems });
+      return;
+    }
+    const added = Object.keys(result.value.assignments).length;
+    const references = Object.keys(result.value.syncs).length;
+    reviewState.update((current) => ({ ...current, assignments: result.value.assignments, syncs: result.value.syncs }));
+    const lines = [`${added} ${added === 1 ? 'associação importada' : 'associações importadas'}.`];
+    if (references > 0) lines.push(`${references} ${references === 1 ? 'referência de ponto importada' : 'referências de ponto importadas'}.`);
+    if (result.ignored > 0) lines.push(`${result.ignored} ${result.ignored === 1 ? 'item ignorado' : 'itens ignorados'}: a trilha, o atleta ou o ponto não existe mais.`);
+    setImportResult({ ok: true, lines });
+  };
+
+  const onMark = (setNumber: number, rallyId: string) => {
+    const video = videoRef.current;
+    if (!video) return;
+    const videoMs = Math.round(video.currentTime * 1000);
+    reviewState.update((current) => setSync(current, setNumber, { rallyId, videoMs }));
+  };
+
+  /** Clicar numa caixa pausa o vídeo e leva o foco ao seletor de atleta daquela trilha (a caixa de cima vence). */
+  const onStageClick = (event: MouseEvent<HTMLDivElement>) => {
+    const video = videoRef.current;
+    if (!video || !analysis || !showBoxes) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    if (y > rect.height - CONTROLS_STRIP_PX) return;
+    const scale = rect.width / analysis.source.width;
+    const hit = [...boxesAt(analysis, video.currentTime * 1000)].reverse().find((box) => {
+      const [x1, y1, x2, y2] = box.bbox;
+      return box.trackId !== null && x >= x1 * scale && x <= x2 * scale && y >= y1 * scale && y <= y2 * scale;
+    });
+    if (!hit || hit.trackId === null) return;
+    video.pause();
+    sideRef.current?.querySelector<HTMLSelectElement>(`select[data-track="${hit.trackId}"]`)?.focus();
   };
 
   const seek = (ms: number) => {
@@ -216,6 +322,55 @@ export function MatchReviewPage() {
         </Notice>
       )}
 
+      {review && reviewState.loadFailed && (
+        <Notice tone="warning" title="Associações guardadas não foram lidas">
+          Não foi possível ler as associações guardadas neste navegador. Você pode continuar: o que associar agora volta a ser guardado.
+        </Notice>
+      )}
+
+      {review && reviewState.saveFailed && (
+        <Notice tone="warning" title="Associações não guardadas">
+          Não foi possível guardar as associações neste navegador. Elas continuam na tela; use Exportar associações para não perder o trabalho.
+        </Notice>
+      )}
+
+      {review && !reviewState.persistent && (
+        <Notice tone="warning" title="Associações só em memória">
+          Neste navegador as associações não ficam guardadas quando a aba é fechada. Use Exportar associações para guardar em arquivo.
+        </Notice>
+      )}
+
+      {repeated.length > 0 && (
+        <Notice tone="warning" title="Confira as associações">
+          <ul className={styles.problems}>
+            {repeated.map((label) => (
+              <li key={label}>{`${label} está em duas caixas ao mesmo tempo. Uma delas provavelmente é outra pessoa: confira as trilhas.`}</li>
+            ))}
+          </ul>
+        </Notice>
+      )}
+
+      {importResult && !importResult.ok && (
+        <Notice tone="error" title="Arquivo de revisão recusado">
+          <ul className={styles.problems}>
+            {importResult.problems.map((problem) => (
+              <li key={problem}>{problem}</li>
+            ))}
+          </ul>
+          Nada foi alterado. Escolha um arquivo exportado por esta tela, para esta partida e esta análise.
+        </Notice>
+      )}
+
+      {importResult?.ok && (
+        <Notice tone="success" title="Arquivo de revisão importado">
+          <ul className={styles.problems}>
+            {importResult.lines.map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
+        </Notice>
+      )}
+
       {videoError && (
         <Notice tone="error" title="Não foi possível tocar o vídeo">
           Este navegador não conseguiu tocar este vídeo. Converta para MP4 (H.264) ou escolha outro arquivo; a análise continua carregada.
@@ -231,7 +386,7 @@ export function MatchReviewPage() {
       <div className={styles.layout}>
         {videoUrl && (
           <div className={styles.main}>
-            <div className={styles.stage}>
+            <div className={styles.stage} onClick={onStageClick}>
               <video ref={videoRef} src={videoUrl} controls playsInline preload="metadata" onLoadedMetadata={onLoadedMetadata} onError={() => setVideoError(true)} />
               <canvas ref={canvasRef} className={styles.overlay} aria-hidden="true" />
             </div>
@@ -261,7 +416,7 @@ export function MatchReviewPage() {
         )}
 
         {analysis && (
-          <aside className={styles.side}>
+          <aside className={styles.side} ref={sideRef}>
             <Card title="Análise carregada">
               <p>{`${analysis.source.filename} · ${analysis.source.width}x${analysis.source.height} · ${analysis.source.fps.toFixed(1).replace('.', ',')} fps`}</p>
               <p className={styles.muted}>{`Trecho analisado: ${formatMs(analysis.analyzedFromMs)} a ${formatMs(analysis.analyzedToMs)}`}</p>
@@ -272,17 +427,56 @@ export function MatchReviewPage() {
                 <p className={styles.muted}>Os números T&lt;n&gt; são temporários do rastreador e não identificam atletas: podem trocar quando as pessoas se cruzam ou ficam ocultas.</p>
                 <ul className={styles.tracks}>
                   {tracks.slice(0, MAX_TRACKS_SHOWN).map((track) => (
-                    <li key={track.trackId}>
+                    <li key={track.trackId} className={styles.trackRow}>
                       <Button disabled={!videoUrl} onClick={() => seek(track.firstMs)}>
-                        {`T${track.trackId} · ${formatMs(track.firstMs)} a ${formatMs(track.lastMs)} · ${track.detections} ${track.detections === 1 ? 'detecção' : 'detecções'}`}
+                        {`T${track.trackId}${trackLabels.has(track.trackId) ? ` · ${trackLabels.get(track.trackId)}` : ''} · ${formatMs(track.firstMs)} a ${formatMs(track.lastMs)} · ${track.detections} ${track.detections === 1 ? 'detecção' : 'detecções'}`}
                       </Button>
+                      <select
+                        className={styles.athlete}
+                        aria-label={`Atleta da trilha T${track.trackId}`}
+                        data-track={track.trackId}
+                        disabled={!ready}
+                        value={trackLabels.has(track.trackId) ? (review?.assignments[track.trackId] ?? '') : ''}
+                        onChange={(event) => onAthlete(track.trackId, event.target.value)}
+                      >
+                        <option value="">Sem atleta</option>
+                        {roster.map((player) => (
+                          <option key={player.id} value={player.id}>
+                            {playerLabels.get(player.id)}
+                          </option>
+                        ))}
+                      </select>
                     </li>
                   ))}
                 </ul>
                 {tracks.length > MAX_TRACKS_SHOWN && <p className={styles.muted}>{`Mostrando ${MAX_TRACKS_SHOWN} de ${tracks.length} trilhas.`}</p>}
-                {!videoUrl && <p className={styles.muted}>Abra o vídeo do jogo para ir ao início de cada trilha.</p>}
+                {!videoUrl && <p className={styles.muted}>Abra o vídeo do jogo para associar atletas e ir ao início de cada trilha.</p>}
+                <div className={styles.group}>
+                  <Button disabled={!ready} onClick={onExport}>
+                    Exportar associações
+                  </Button>
+                </div>
+                {ready && (
+                  <label className={styles.picker}>
+                    Importar associações (.json)
+                    <input type="file" accept=".json,application/json" onChange={(event) => void onImport(event)} />
+                  </label>
+                )}
+                {ready && <p className={styles.muted}>Importar substitui as associações e as referências de ponto desta tela.</p>}
               </Card>
             </section>
+            {matchState && (
+              <ReviewPoints
+                sets={matchState.sets}
+                review={review}
+                enabled={ready && videoUrl !== null}
+                videoOpen={videoUrl !== null}
+                playersById={playersById}
+                onMark={onMark}
+                onClear={onClearSync}
+                onSeek={(videoMs) => seek(seekTarget(videoMs))}
+              />
+            )}
           </aside>
         )}
       </div>

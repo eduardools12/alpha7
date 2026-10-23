@@ -222,3 +222,18 @@ describe('isWithinAnalysis', () => {
   });
 });
 
+describe('id da análise', () => {
+  it('é estável para o mesmo texto e muda quando o conteúdo muda', () => {
+    const text = JSON.stringify(base());
+    const a = parseVideoAnalysis(text);
+    const b = parseVideoAnalysis(text);
+    const other = base();
+    other.frames[1]!.detections[0]!.bbox_xyxy = [21, 20, 70, 120];
+    const c = parseVideoAnalysis(JSON.stringify(other));
+    if (!a.ok || !b.ok || !c.ok) throw new Error('arquivo de teste inválido');
+    expect(a.value.id).toBe(b.value.id);
+    expect(a.value.id).not.toBe(c.value.id);
+    expect(a.value.id).toMatch(/^[0-9a-f]{8}-\d+$/);
+  });
+});
+

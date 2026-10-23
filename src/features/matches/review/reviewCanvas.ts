@@ -9,8 +9,11 @@ const UNTRACKED = '#aaaaaa';
 
 export const trackColor = (trackId: number | null): string => (trackId === null ? UNTRACKED : (PALETTE[trackId % PALETTE.length] ?? UNTRACKED));
 
-/** Desenha as caixas. `scale` converte os pixels da análise para os pixels do canvas. O texto "T<n>" é o número TEMPORÁRIO do rastreador. */
-export function drawBoxes(ctx: CanvasRenderingContext2D, boxes: readonly TrackBox[], scale: number): void {
+/**
+ * Desenha as caixas. `scale` converte os pixels da análise para os pixels do canvas. Sem atleta associado, o texto é "T<n>", o
+ * número TEMPORÁRIO do rastreador; com atleta, `labelFor` devolve o nome a mostrar.
+ */
+export function drawBoxes(ctx: CanvasRenderingContext2D, boxes: readonly TrackBox[], scale: number, labelFor?: (trackId: number) => string | undefined): void {
   ctx.lineWidth = 2;
   ctx.font = '600 12px Inter, sans-serif';
   for (const box of boxes) {
@@ -19,7 +22,7 @@ export function drawBoxes(ctx: CanvasRenderingContext2D, boxes: readonly TrackBo
     ctx.strokeStyle = color;
     ctx.setLineDash(box.trackId === null ? [4, 3] : []);
     ctx.strokeRect(x1 * scale, y1 * scale, (x2 - x1) * scale, (y2 - y1) * scale);
-    const label = box.trackId === null ? '?' : `T${box.trackId}`;
+    const label = box.trackId === null ? '?' : (labelFor?.(box.trackId) ?? `T${box.trackId}`);
     const width = ctx.measureText(label).width + 8;
     const top = Math.max(0, y1 * scale - 16);
     ctx.fillStyle = color;
