@@ -38,6 +38,7 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Escalação | Editor: 6 titulares, líbero, reservas, papel tático, ordem de saque base, prévia do rodízio, salvar, listar, excluir | Parcial |
 | Artes | Gerador de artes (referência 05, ampliado na 0.8.0): 9 tipos (escalação, dia de jogo, resultado, atleta, carta do atleta, destaque, capa de lances, institucional, capas dos destaques), fundo roxo ou branco, feed 4:5 e story 9:16, fotos dos atletas, prévia e PNG real; **só comissão técnica**. Veja `ARTS.md` | Feito (0.8.0) |
 | Coleta assistida | Partida ao vivo: atleta escolhido tocando na quadra e sacador sugerido para confirmar; treino: rodízio e atalhos de teclado; revisão com vídeo (`/partidas/:id/revisao`): caixas da análise sobre o vídeo, atletas por trilha, pontos ligados ao instante do vídeo e detalhe de qualquer ponto com ações técnicas. Vídeo e análise ficam só no computador; associações só no navegador | Feito (0.9.0); verificado em navegador real no computador, **não em celular de verdade**. Detalhes: `docs/superpowers/specs/2026-10-23-coleta-assistida-design.md`, `docs/SCREEN_MAP.md` (tela 09), `docs/DATA_SAFETY.md` (§16) |
+| Acesso | Cadastro por conta própria + convite com código: o coach cria convites (papel, validade de 1 a 90 dias, 1 a 50 usos, rótulo), vê a lista e revoga; a pessoa cria a conta, digita o código (ou abre o link) e entra no papel do convite; quem não tem convite pode criar a própria equipe | Feito (0.10.0) no código e no banco (migração aplicada em 2026-11-19 e provada no banco real); **o painel do Supabase precisa ligar "Allow new users to sign up" e o dono decidir a confirmação de e-mail/SMTP**; não testado ainda com e-mail real nem por pessoas reais |
 | Dashboard | Indicadores de elenco e Overall médio, destaques e evolução (reais); treinos e partidas reais (com partidas cadastradas, o resumo de demonstração some) | Feito |
 | Treinos | Criar, editar, excluir e listar treinos (nome, data, duração, descrição, observações, responsável), participantes do elenco, vários exercícios, conclusão/reabertura | Feito (v0.2) |
 | Treinos | Registro rápido de tentativas por fundamento (saque, recepção, levantamento, ataque, bloqueio, defesa), com feedback, histórico recente e desfazer | Feito (v0.2) |
@@ -49,7 +50,7 @@ Uso inicial: uma equipe, uma pessoa por vez, no celular e no computador. Sem log
 | Dados | Inicialização segura: sem workspace o app pergunta como começar (vazio, demonstração ou backup) ou abre a recuperação; nunca cria demonstração por conta própria | Feito (0.3.1). Não detecta toda perda de dados: ver DATA_SAFETY.md, seção 7 |
 | Dados | Backup em arquivo JSON com versão de formato e checksum; importação segura com prévia e confirmação; cópia automática antes de substituir; verificar integridade; lembrete de backup | Feito (v0.3). Ver `DATA_SAFETY.md` |
 | Dados | Supabase fase 1: projeto, esquema, RLS por equipe, papéis (coach/analyst/viewer), testes no banco | Feito no banco (ver `supabase/README.md`); o app ainda não o usa |
-| Dados | Login por e-mail e senha (sem cadastro público), recuperação de senha, escolha/criação de equipe, papéis coach/analyst/viewer na interface, `SupabaseGateway`, adicionar pessoas à equipe (coach, pela função do banco) | Feito (0.4.0); o padrão do código é `local`, e o site de produção usa `supabase` (`VITE_DATA_BACKEND=supabase`). Login, criar equipe, cadastrar atleta e recuperação de senha foram testados à mão com conta real; papéis analyst/viewer e adicionar pessoas só com simulador e SQL |
+| Dados | Login por e-mail e senha, criar a própria conta (0.10.0), recuperação de senha, escolha/criação de equipe, papéis coach/analyst/viewer na interface, `SupabaseGateway`, adicionar pessoas à equipe (coach, pela função do banco) | Feito (0.4.0); o padrão do código é `local`, e o site de produção usa `supabase` (`VITE_DATA_BACKEND=supabase`). Login, criar equipe, cadastrar atleta e recuperação de senha foram testados à mão com conta real; papéis analyst/viewer e adicionar pessoas só com simulador e SQL |
 | Dados | Importação dos dados locais para a nuvem, restaurar/substituir workspace remoto, tempo real, imagens, sincronização | Planejado |
 
 ### Limitações conhecidas da escalação (Parcial)
@@ -121,13 +122,14 @@ Implementado: não duplicar atleta; mover/trocar; líbero de ofício fora das zo
 ### Supabase fase 2 (0.4.0: login, equipe e dados remotos; verificados com cliente simulado e, nas políticas, no banco real)
 
 - [x] `local` continua o padrão e funciona como antes, sem login; valor inválido de `VITE_DATA_BACKEND` mostra erro e não troca de backend.
-- [x] Com `supabase`: sem sessão só aparece o login; não há cadastro público; sair e sessão expirada limpam os dados da tela.
+- [x] Com `supabase`: sem sessão só aparece o login (com "Criar conta"); ter conta não abre dado nenhum; sair e sessão expirada limpam os dados da tela.
 - [x] Login com validação, mensagens claras, carregamento, recuperação de senha e tela de nova senha.
 - [x] Sem equipe: criar equipe (função `create_team`, vira coach, sem duplicar por clique repetido); uma equipe abre sozinha; várias pedem escolha; trocar de equipe limpa a anterior.
 - [x] Papéis na interface: viewer só lê; analyst registra; coach faz tudo. Rotas de escrita barradas por endereço. O banco recusa o que a interface esconderia.
 - [x] `SupabaseGateway`: leitura paginada, ids e vínculos preservados, registros idempotentes e anuláveis, erros de conexão/permissão/sessão sem perda silenciosa.
 - [x] Nenhum dado local copiado para a nuvem; dados locais e remotos não se misturam.
-- [x] Painel do Supabase configurado e testado à mão: conta criada, cadastro aberto desligado, *Site URL*/*Redirect URLs* do site publicado, login e recuperação de senha de ponta a ponta.
+- [x] Painel do Supabase configurado e testado à mão (2026-10-13; o cadastro aberto estava desligado, e a 0.10.0 exige ligá-lo: ver `supabase/README.md`): *Site URL*/*Redirect URLs* do site publicado, login e recuperação de senha de ponta a ponta.
+- [ ] **Pendente (0.10.0):** ligar o cadastro aberto no painel (a migração `20261119120000_team_invites` já foi aplicada) e testar à mão: criar conta, usar um convite de cada papel, revogar e recuperar a senha.
 - [ ] **Pendente:** testar papéis analyst e viewer e "Adicionar pessoa à equipe" com contas reais; SMTP próprio (o e-mail padrão do Supabase tem limite de envios).
 - [ ] **Pendente:** escalações/treinos gravam em etapas (sem transação entre tabelas); excluir treino é definitivo na nuvem; sem tempo real.
 

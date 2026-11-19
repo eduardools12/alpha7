@@ -31,8 +31,33 @@ test.describe('login com o backend Supabase', () => {
       await expect(heading(page, 'Entrar')).toBeVisible();
       await expect(page.getByRole('navigation', { name: 'Principal' })).toHaveCount(0);
     }
-    await expect(page.getByText(/criar conta|cadastre-se/i)).toHaveCount(0);
-    await expect(page.getByText(/acesso é por convite/i)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Criar conta' })).toBeVisible();
+    await expect(page.getByText(/código de convite da comissão técnica/i)).toBeVisible();
+  });
+
+  test('criar conta: valida os campos, leva o foco ao primeiro erro e mostra a falha de conexão', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'Criar conta' }).click();
+    await expect(heading(page, 'Criar conta')).toBeVisible();
+    await page.getByRole('button', { name: 'Criar conta' }).click();
+    await expect(page.getByText('Informe um e-mail válido.')).toBeVisible();
+    await expect(page.getByText('Use pelo menos 8 caracteres.')).toBeVisible();
+    await expect(page.getByLabel('E-mail')).toBeFocused();
+    await page.getByLabel('E-mail').fill('pessoa@exemplo.com');
+    await page.getByLabel('Senha', { exact: true }).fill('senha-comprida-ok');
+    await page.getByLabel('Confirmar senha').fill('outra-senha-ok');
+    await page.getByRole('button', { name: 'Criar conta' }).click();
+    await expect(page.getByText('As senhas não são iguais.')).toBeVisible();
+    await page.getByLabel('Confirmar senha').fill('senha-comprida-ok');
+    await page.getByRole('button', { name: 'Criar conta' }).click();
+    await expect(page.getByText(/Sem conexão com o servidor/)).toBeVisible({ timeout: 20_000 });
+  });
+
+  test('link de convite: avisa antes do login e tira o código do endereço', async ({ page }) => {
+    await page.goto('/?convite=a1b2c3d4e5f6');
+    await expect(heading(page, 'Entrar')).toBeVisible();
+    await expect(page.getByText('Você recebeu um convite')).toBeVisible();
+    expect(page.url()).not.toContain('convite');
   });
 
   test('valida os campos e leva o foco ao primeiro erro', async ({ page }) => {
@@ -93,6 +118,14 @@ test.describe('login com o backend Supabase', () => {
       await expect(heading(page, 'Redefinir senha')).toBeVisible();
       await audit(page, 'recuperação de senha');
       expect(await overflowing(page), 'passa da borda na recuperação').toEqual([]);
+
+      await page.getByRole('button', { name: 'Voltar ao login' }).click();
+      await page.getByRole('button', { name: 'Criar conta' }).click();
+      await expect(heading(page, 'Criar conta')).toBeVisible();
+      await page.getByRole('button', { name: 'Criar conta' }).click(); // com os erros de validação visíveis
+      await expect(page.getByText('Use pelo menos 8 caracteres.')).toBeVisible();
+      await audit(page, 'criar conta com erros');
+      expect(await overflowing(page), 'passa da borda em criar conta').toEqual([]);
     });
   }
 });
