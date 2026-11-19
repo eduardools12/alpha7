@@ -35,6 +35,8 @@ interface TableDef {
 const T = 'team_id';
 export const TABLES: Record<string, TableDef> = {
   teams: { pk: ['id'], unique: [], fks: [], writers: [] },
+  // Convites: só as funções gravam; só o coach lê, e nunca a coluna do código (code_hash).
+  team_invites: { pk: ['id'], unique: [], fks: [], writers: [] },
   team_members: { pk: [T, 'user_id'], unique: [], fks: [], writers: ['coach'] },
   players: {
     pk: [T, 'id'],
@@ -197,6 +199,8 @@ type AuthListener = (event: AuthEvent, session: FakeSession | null) => void;
 
 export interface FakeSupabaseOptions {
   users?: FakeAuthUser[];
+  /** Projeto com "Confirm email" ligado: criar conta não abre sessão até confirmar. */
+  confirmEmail?: boolean;
 }
 
 export class FakeSupabase {
@@ -222,8 +226,13 @@ export class FakeSupabase {
   private listeners = new Set<AuthListener>();
   private idCounter = 0;
 
+  confirmEmail: boolean;
+  /** Cada criação de conta pedida (e-mail e endereço de retorno), para provar o que o app envia. */
+  signUps: { email: string; emailRedirectTo: string | undefined }[] = [];
+
   constructor(options: FakeSupabaseOptions = {}) {
     this.users = options.users ?? [];
+    this.confirmEmail = options.confirmEmail ?? false;
   }
 
   /** O cliente tipado que o aplicativo recebe. */
@@ -282,11 +291,73 @@ export class FakeSupabase {
       else rows.push({ team_id: team, user_id: target.id, role: String(args.p_role), created_at: new Date().toISOString() });
       return { data: null, error: null, status: 200 };
     }
+    if (name === 'create_team_invite') return this.createInvite(args);
+    if (name === 'redeem_team_invite') return this.redeemInvite(args);
+    if (name === 'revoke_team_invite') return this.revokeInvite(args);
     if (isMatchFunction(name)) {
       if (!uid) return { data: null, error: pgError('42501', 'permission denied for function'), status: 403 };
       return runMatchRpc(this.db, (team) => this.role(team), name, args);
     }
     return { data: null, error: pgError('PGRST202', `Could not find the function public.${name}`), status: 404 };
+  }
+
+  /* ───────── convites (espelham as funções create/redeem/revoke_team_invite do banco) ───────── */
+  /** Tentativas inválidas de resgate por pessoa (instantes em ms). */
+  inviteAttempts = new Map<string, number[]>();
+  private static inviteKey = (code: unknown) => String(code ?? '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+
+  private createInvite(args: Row): Result {
+    const uid = this.session?.user.id;
+    const team = String(args.p_team);
+    const fail = (code: string, message: string): Result => ({ data: null, error: pgError(code, message), status: code === '42501' ? 403 : 400 });
+    if (!uid || this.role(team) !== 'coach') return fail('42501', 'Só a comissão técnica (coach) pode criar convites.');
+    if (!['coach', 'analyst', 'viewer'].includes(String(args.p_role))) return fail('22023', 'Papel inválido: use coach, analyst ou viewer.');
+    const days = Number(args.p_valid_days);
+    const uses = Number(args.p_max_uses);
+    if (!(days >= 1 && days <= 90)) return fail('22023', 'A validade do convite deve ser de 1 a 90 dias.');
+    if (!(uses >= 1 && uses <= 50)) return fail('22023', 'O número de usos deve ser de 1 a 50.');
+    const label = String(args.p_label ?? '').trim();
+    if (label.length > 60) return fail('22023', 'O rótulo pode ter até 60 caracteres.');
+    const raw = (++this.idCounter).toString(16).toUpperCase().padStart(12, 'A');
+    const id = `invite-${this.idCounter}`;
+    const expires = new Date(Date.now() + days * 86_400_000).toISOString();
+    this.db.team_invites?.push({
+      id, team_id: team, code_hash: raw, role: String(args.p_role), label: label === '' ? null : label, max_uses: uses, used_count: 0,
+      expires_at: expires, revoked_at: null, created_by: uid, created_at: new Date().toISOString(),
+    });
+    return { data: { id, code: `${raw.slice(0, 4)}-${raw.slice(4, 8)}-${raw.slice(8, 12)}`, expires_at: expires }, error: null, status: 200 };
+  }
+
+  private redeemInvite(args: Row): Result {
+    const uid = this.session?.user.id;
+    if (!uid) return { data: null, error: pgError('28000', 'Entre com seu e-mail para usar um convite.'), status: 400 };
+    const now = Date.now();
+    const recent = (this.inviteAttempts.get(uid) ?? []).filter((t) => t > now - 15 * 60_000);
+    this.inviteAttempts.set(uid, recent);
+    const reply = (data: Row): Result => ({ data, error: null, status: 200 });
+    const invalid = () => {
+      recent.push(now);
+      return reply({ ok: false, reason: 'invalid' });
+    };
+    if (recent.length >= 10) return reply({ ok: false, reason: 'throttled' });
+    const key = FakeSupabase.inviteKey(args.p_code);
+    if (key.length !== 12) return invalid();
+    const invite = (this.db.team_invites ?? []).find((i) => i.code_hash === key);
+    if (!invite) return invalid();
+    const existing = this.db.team_members?.find((m) => m.team_id === invite.team_id && m.user_id === uid);
+    if (existing) return reply({ ok: true, team_id: invite.team_id, role: existing.role, already: true });
+    if (invite.revoked_at !== null || Date.parse(String(invite.expires_at)) <= now || Number(invite.used_count) >= Number(invite.max_uses)) return invalid();
+    this.db.team_members?.push({ team_id: invite.team_id, user_id: uid, role: invite.role, created_at: new Date().toISOString() });
+    invite.used_count = Number(invite.used_count) + 1;
+    return reply({ ok: true, team_id: invite.team_id, role: invite.role, already: false });
+  }
+
+  private revokeInvite(args: Row): Result {
+    if (this.role(args.p_team) !== 'coach') return { data: null, error: pgError('42501', 'Só a comissão técnica (coach) pode revogar convites.'), status: 403 };
+    const invite = (this.db.team_invites ?? []).find((i) => i.team_id === args.p_team && i.id === args.p_invite);
+    if (!invite) return { data: null, error: pgError('P0002', 'O convite não existe.'), status: 400 };
+    invite.revoked_at ??= new Date().toISOString();
+    return { data: null, error: null, status: 200 };
   }
 
   /* ───────── storage (fotos) ───────── */
@@ -344,6 +415,26 @@ export class FakeSupabase {
       if (!user) {
         return { data: { session: null, user: null }, error: { message: 'Invalid login credentials', status: 400, code: 'invalid_credentials', name: 'AuthApiError' } };
       }
+      this.session = { user: { id: user.id, email: user.email } };
+      this.emit('SIGNED_IN', this.session);
+      return { data: { session: this.session, user: this.session.user }, error: null };
+    },
+    signUp: async (credentials: { email: string; password: string; options?: { emailRedirectTo?: string } }) => {
+      this.signUps.push({ email: credentials.email, emailRedirectTo: credentials.options?.emailRedirectTo });
+      if (this.authFailure) return this.takeAuthFailure();
+      if (this.offline) return { data: { session: null, user: null }, error: { message: 'Failed to fetch', status: 0, name: 'AuthRetryableFetchError' } };
+      if (credentials.password.length < 6) {
+        return { data: { session: null, user: null }, error: { message: 'Password should be at least 6 characters.', status: 422, code: 'weak_password', name: 'AuthWeakPasswordError' } };
+      }
+      const taken = this.users.some((u) => u.email.toLowerCase() === credentials.email.toLowerCase());
+      if (taken) {
+        // Com a confirmação ligada o Supabase finge sucesso (não revela quem tem conta); desligada, avisa.
+        if (this.confirmEmail) return { data: { session: null, user: { id: 'ghost', email: credentials.email } }, error: null };
+        return { data: { session: null, user: null }, error: { message: 'User already registered', status: 422, code: 'user_already_exists', name: 'AuthApiError' } };
+      }
+      const user = { id: `user-${++this.idCounter}`, email: credentials.email, password: credentials.password };
+      this.users.push(user);
+      if (this.confirmEmail) return { data: { session: null, user: { id: user.id, email: user.email } }, error: null };
       this.session = { user: { id: user.id, email: user.email } };
       this.emit('SIGNED_IN', this.session);
       return { data: { session: this.session, user: this.session.user }, error: null };
@@ -426,7 +517,11 @@ export class FakeSupabase {
   private run(q: Query, def: TableDef): Result {
     const table = this.db[q.table] ?? [];
     if (q.op === 'select') {
-      let rows = table.filter((r) => this.matches(q, r) && this.role(this.teamOf(q.table, r)) !== null);
+      if (q.table === 'team_invites' && (!q.columns || q.columns === '*' || /code_hash/.test(q.columns))) {
+        throw new Abort(pgError('42501', 'permission denied for table team_invites'));
+      }
+      const visible = (r: Row) => (q.table === 'team_invites' ? this.role(this.teamOf(q.table, r)) === 'coach' : this.role(this.teamOf(q.table, r)) !== null);
+      let rows = table.filter((r) => this.matches(q, r) && visible(r));
       for (const { column, ascending } of [...q.orders].reverse()) {
         rows = [...rows].sort((a, b) => compare(a[column], b[column]) * (ascending ? 1 : -1));
       }

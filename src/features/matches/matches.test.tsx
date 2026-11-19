@@ -182,6 +182,7 @@ describe('Acompanhamento ao vivo', () => {
     expect(theirs().queryByRole('button', { name: 'Ace sofrido' })).not.toBeInTheDocument();
 
     await ctx.user.click(mine().getByRole('button', { name: 'Ace' }));
+    await ctx.user.click(await screen.findByRole('button', { name: 'Confirmar Ana A. #1' })); // o sacador é sugerido, a pessoa confirma
     await waitFor(() => expect(pointsOf('Alpha7')).toBe('1'));
     expect(stored(ctx).rallies).toHaveLength(1);
     expect(stored(ctx).rallies[0]).toMatchObject({ winnerSide: 'us', servingSide: 'us', reason: 'ace', rotation: 0, serverPlayerId: 'p1', seq: 1 });
@@ -281,10 +282,213 @@ describe('Acompanhamento ao vivo', () => {
     expect(stored(ctx).rallies[1]?.playerId).toBeNull();
   });
 
+  describe('atleta envolvido escolhido na quadra', () => {
+    const involvedGroup = () => screen.getByRole('group', { name: /Atleta envolvido no próximo ponto/ });
+    const spot = (name: string) => within(involvedGroup()).getByRole('button', { name });
+
+    it('as seis posições aparecem como botões com a posição e o papel na descrição', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      expect(spot('Ana A. #1')).toHaveAccessibleDescription('posição P1, Levantador');
+      expect(spot('Bia B. #2')).toHaveAccessibleDescription('posição P2, Oposto');
+      expect(spot('Fabi F. #6')).toHaveAccessibleDescription('posição P6, Central');
+      expect(within(involvedGroup()).getByRole('button', { name: 'Gabi G. #7' })).toBeInTheDocument(); // o líbero continua à parte
+    });
+
+    it('tocar na posição escolhe o atleta só para o próximo ponto; tocar de novo desmarca', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(spot('Cris C. #3'));
+      expect(spot('Cris C. #3')).toHaveAttribute('aria-pressed', 'true');
+      await ctx.user.click(spot('Cris C. #3'));
+      expect(spot('Cris C. #3')).toHaveAttribute('aria-pressed', 'false');
+      await ctx.user.click(spot('Cris C. #3'));
+      await tap(ctx, 'Ataque vencedor');
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(stored(ctx).rallies[0]).toMatchObject({ reason: 'ataque', playerId: 'p3' });
+      expect(spot('Cris C. #3')).toHaveAttribute('aria-pressed', 'false'); // vale só para um ponto
+    });
+
+    it('a quadra e o líbero são exclusivos: só um atleta envolvido por vez', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(spot('Bia B. #2'));
+      await ctx.user.click(spot('Gabi G. #7'));
+      expect(spot('Gabi G. #7')).toHaveAttribute('aria-pressed', 'true');
+      expect(spot('Bia B. #2')).toHaveAttribute('aria-pressed', 'false');
+      await ctx.user.click(spot('Bia B. #2'));
+      expect(spot('Gabi G. #7')).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('depois de conquistar o saque a quadra gira e a escolha continua pelo atleta, não pela posição', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await tap(ctx, 'Ponto do adversário');
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      await ctx.user.click(spot('Cris C. #3'));
+      await tap(ctx, 'Ponto do Alpha7'); // side-out: o Alpha7 gira
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(2));
+      expect(spot('Bia B. #2')).toHaveAccessibleDescription('posição P1, Oposto');
+      expect(spot('Ana A. #1')).toHaveAccessibleDescription('posição P6, Levantador'); // quem sacava vai para o fundo
+      expect(stored(ctx).rallies[1]).toMatchObject({ playerId: 'p3', winnerSide: 'us' });
+    });
+
+    it('ace com atleta escolhido na quadra grava direto com ele, sem a barra do sacador', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(spot('Dani D. #4'));
+      await ctx.user.click(within(screen.getByRole('region', { name: 'Ponto do Alpha7' })).getByRole('button', { name: 'Ace' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(stored(ctx).rallies[0]).toMatchObject({ reason: 'ace', playerId: 'p4' });
+      expect(screen.queryByRole('group', { name: 'Confirmar o atleta do ponto' })).not.toBeInTheDocument();
+    });
+
+    it('sem líbero no set, a lista traz só as seis posições', async () => {
+      const set: MatchSet = {
+        matchId: 'm1',
+        number: 1,
+        firstServer: 'us',
+        starters: roles.map((role, slot) => ({ slot, playerId: `p${slot + 1}`, role })),
+        liberoId: null,
+        createdAt: NOW,
+      };
+      await openLive(world({ matches: [baseMatch({ status: 'em_andamento' })], matchSets: [set] }));
+      await screen.findByRole('region', { name: 'Placar' });
+      expect(within(involvedGroup()).getAllByRole('button')).toHaveLength(6);
+    });
+
+    it('o texto de quem saca continua visível para conferir a rotação', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      expect(screen.getByText('Saca agora: Ana A. #1.')).toBeInTheDocument();
+      expect(screen.getByRole('list', { name: 'Formação na rotação 1' })).toBeInTheDocument();
+    });
+  });
+
+  describe('sugestão do sacador (confirmar antes de gravar)', () => {
+    const bar = () => screen.findByRole('group', { name: 'Confirmar o atleta do ponto' });
+    const mine = () => within(screen.getByRole('region', { name: 'Ponto do Alpha7' }));
+    const theirs = () => within(screen.getByRole('region', { name: 'Ponto do adversário' }));
+
+    it('ace do Alpha7 sem atleta escolhido mostra a barra e só grava ao confirmar, sem criar ação técnica', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(mine().getByRole('button', { name: 'Ace' }));
+      expect(await bar()).toHaveTextContent('Ace: Ana A. #1 (sacador)');
+      expect(stored(ctx).rallies ?? []).toHaveLength(0); // nada foi gravado ainda
+      await ctx.user.click(screen.getByRole('button', { name: 'Confirmar Ana A. #1' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(stored(ctx).rallies[0]).toMatchObject({ reason: 'ace', playerId: 'p1', winnerSide: 'us' });
+      expect(stored(ctx).rallyActions ?? []).toHaveLength(0); // motivo e ação técnica são camadas separadas
+      expect(screen.queryByRole('group', { name: 'Confirmar o atleta do ponto' })).not.toBeInTheDocument();
+    });
+
+    it('erro de saque do Alpha7 também sugere o sacador', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(theirs().getByRole('button', { name: 'Erro de saque do Alpha7' }));
+      expect(await bar()).toHaveTextContent('Erro de saque do Alpha7: Ana A. #1 (sacador)');
+      await ctx.user.click(screen.getByRole('button', { name: 'Confirmar Ana A. #1' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(stored(ctx).rallies[0]).toMatchObject({ reason: 'erro_saque', playerId: 'p1', winnerSide: 'them' });
+    });
+
+    it('"Sem atleta" grava o ponto sem atleta', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(mine().getByRole('button', { name: 'Ace' }));
+      await ctx.user.click(await screen.findByRole('button', { name: 'Sem atleta' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(stored(ctx).rallies[0]).toMatchObject({ reason: 'ace', playerId: null });
+    });
+
+    it('"Escolher outro atleta" fecha a barra sem gravar; o atleta escolhido vale direto no próximo toque', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(mine().getByRole('button', { name: 'Ace' }));
+      await ctx.user.click(await screen.findByRole('button', { name: 'Escolher outro atleta' }));
+      expect(screen.queryByRole('group', { name: 'Confirmar o atleta do ponto' })).not.toBeInTheDocument();
+      expect(stored(ctx).rallies ?? []).toHaveLength(0);
+      const group = screen.getByRole('group', { name: /Atleta envolvido no próximo ponto/ });
+      await ctx.user.click(within(group).getByRole('button', { name: 'Bia B. #2' }));
+      await ctx.user.click(mine().getByRole('button', { name: 'Ace' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(stored(ctx).rallies[0]).toMatchObject({ reason: 'ace', playerId: 'p2' });
+      expect(screen.queryByRole('group', { name: 'Confirmar o atleta do ponto' })).not.toBeInTheDocument();
+    });
+
+    it('não abre a barra para ponto sem motivo nem para outros motivos', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await tap(ctx, 'Ataque vencedor');
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      await tap(ctx, 'Ponto do Alpha7');
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(2));
+      expect(screen.queryByRole('group', { name: 'Confirmar o atleta do ponto' })).not.toBeInTheDocument();
+    });
+
+    it('ace sofrido (adversário sacando) grava direto, sem sugerir ninguém', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await tap(ctx, 'Ponto do adversário'); // o adversário passa a sacar
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      await ctx.user.click(await screen.findByRole('button', { name: 'Ace sofrido' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(2));
+      expect(screen.queryByRole('group', { name: 'Confirmar o atleta do ponto' })).not.toBeInTheDocument();
+      expect(stored(ctx).rallies[1]).toMatchObject({ reason: 'ace', playerId: null, winnerSide: 'them' });
+    });
+
+    it('sacador que já não está no elenco: grava direto, sem sugerir quem não existe', async () => {
+      const set: MatchSet = {
+        matchId: 'm1',
+        number: 1,
+        firstServer: 'us',
+        starters: roles.map((role, slot) => ({ slot, playerId: slot === 0 ? 'fantasma' : `p${slot + 1}`, role })),
+        liberoId: null,
+        createdAt: NOW,
+      };
+      const ctx = await openLive(world({ matches: [baseMatch({ status: 'em_andamento' })], matchSets: [set] }));
+      await screen.findByRole('region', { name: 'Placar' });
+      await ctx.user.click(mine().getByRole('button', { name: 'Ace' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      expect(screen.queryByRole('group', { name: 'Confirmar o atleta do ponto' })).not.toBeInTheDocument();
+    });
+
+    it('toque duplo em Confirmar grava um ponto só', async () => {
+      const ctx = await openLive();
+      await startFirstSet(ctx);
+      await ctx.user.click(mine().getByRole('button', { name: 'Ace' }));
+      await ctx.user.dblClick(await screen.findByRole('button', { name: 'Confirmar Ana A. #1' }));
+      await waitFor(() => expect(stored(ctx).rallies).toHaveLength(1));
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(stored(ctx).rallies).toHaveLength(1);
+    });
+
+    it('falha ao gravar mantém a barra aberta, mostra o erro e não muda o placar', async () => {
+      const ctx = renderApp({
+        path: '/partidas/m1/acompanhar',
+        workspace: world(),
+        wrapGateway: (local) => {
+          local.recordRally = () => Promise.reject(new Error('disco cheio'));
+          return local;
+        },
+      });
+      await screen.findByRole('heading', { level: 1, name: 'Alpha7 x Rivais' });
+      await startFirstSet(ctx);
+      await ctx.user.click(mine().getByRole('button', { name: 'Ace' }));
+      await ctx.user.click(await screen.findByRole('button', { name: 'Confirmar Ana A. #1' }));
+      expect(await screen.findByRole('alert')).toHaveTextContent('Não foi possível salvar');
+      expect(screen.getByRole('group', { name: 'Confirmar o atleta do ponto' })).toBeInTheDocument();
+      expect(pointsOf('Alpha7')).toBe('0');
+      expect(stored(ctx).rallies ?? []).toHaveLength(0);
+    });
+  });
+
   it('ações técnicas ficam separadas do motivo, são opcionais e podem ser desfeitas', async () => {
     const ctx = await openLive();
     await startFirstSet(ctx);
     await tap(ctx, 'Ace');
+    await ctx.user.click(await screen.findByRole('button', { name: 'Confirmar Ana A. #1' }));
     await screen.findByText('Detalhar o último ponto (opcional)');
     await ctx.user.click(screen.getByText('Registrar fundamentos de um atleta neste ponto'));
     await ctx.user.selectOptions(screen.getByLabelText('Atleta'), 'p1');

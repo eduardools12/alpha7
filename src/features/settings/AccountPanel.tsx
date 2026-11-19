@@ -1,12 +1,13 @@
 import { useRef, useState, type FormEvent } from 'react';
 import { useAccess } from '@/auth/AccessContext';
 import { isValidEmail } from '@/auth/AuthProvider';
-import { useSessionInfo } from '@/auth/TeamGate';
+import { CodeForm, useSessionInfo } from '@/auth/TeamGate';
 import { CAPABILITIES, CAPABILITY_LABEL, ROLES, ROLE_LABEL, isRole, type Role } from '@/auth/permissions';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { SelectField, TextField } from '@/components/ui/Field';
 import { Notice } from '@/components/ui/Notice';
+import { InvitesPanel } from './InvitesPanel';
 import styles from './DataPanel.module.css';
 
 /** Conta, equipe e papel. Só existe com os dados na nuvem (no backend local não há login). */
@@ -44,14 +45,20 @@ export function AccountPanel() {
           Sair
         </Button>
       </div>
+      {session.team.role === 'coach' && <InvitesPanel session={session} />}
       {session.team.role === 'coach' && <AddMember addMember={session.addMember} />}
+      <div className={styles.block}>
+        <h3 className={styles.heading}>Entrar em outra equipe</h3>
+        <p className={styles.muted}>Recebeu um código de convite de outra equipe? Use-o aqui. Você continua nesta equipe e pode trocar de uma para a outra.</p>
+        <CodeForm initialCode="" onJoin={session.redeemInvite} label="Entrar em outra equipe com convite" />
+      </div>
     </Card>
   );
 }
 
 /**
  * Adicionar uma pessoa à equipe (só coach), pela função add_team_member do banco. Não cria contas: a pessoa precisa
- * já ter sido convidada no painel do Supabase (a entrada no app continua sendo por convite).
+ * já ter criado a conta no app (quem ainda não tem entra pelo convite com código).
  */
 function AddMember({ addMember }: { addMember: (email: string, role: Role) => Promise<{ ok: true } | { ok: false; message: string }> }) {
   const [email, setEmail] = useState('');
@@ -85,8 +92,8 @@ function AddMember({ addMember }: { addMember: (email: string, role: Role) => Pr
     <form className={styles.block} onSubmit={(event) => void submit(event)} noValidate aria-label="Adicionar pessoa à equipe">
       <h3 className={styles.heading}>Adicionar pessoa à equipe</h3>
       <p className={styles.muted}>
-        A pessoa precisa ter uma conta (convite criado no painel do Supabase). Aqui você só define a equipe e o papel dela. Se ela já
-        está na equipe, o papel é atualizado.
+        Para quem já tem conta no app (criada pela própria pessoa). Aqui você define a equipe e o papel dela; se ela já está na equipe, o papel é
+        atualizado. Para quem ainda não tem conta, prefira o convite com código acima.
       </p>
       <TextField label="E-mail da pessoa" type="email" name="member-email" value={email} onChange={(e) => setEmail(e.target.value)} error={error} disabled={busy} />
       <SelectField label="Papel" value={role} onChange={(e) => isRole(e.target.value) && setRole(e.target.value)} disabled={busy}>

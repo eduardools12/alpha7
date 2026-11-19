@@ -31,14 +31,35 @@ Reinicie o servidor (`npm run dev`) depois de mudar. Configuração incompleta o
 **Com `local`:** nada muda. Sem login, sem rede, com backup, recuperação e demonstração como antes.
 **Com `supabase`:** o app pede login; depois abre a equipe da pessoa; os dados vêm do banco. Os dados locais do navegador **não são lidos nem alterados** e **nunca se misturam** com os remotos. Equipe sem dados abre **vazia** (nunca demonstração). Falha de leitura é erro explícito, nunca uma demonstração criada em silêncio.
 
-### Primeiro acesso de uma equipe (procedimento)
+### Entrada de pessoas: conta própria e convite com código (0.10.0)
 
-1. **No painel do Supabase (manual):** criar a conta da primeira pessoa em *Authentication → Users* (adicionar/convidar usuário, com e-mail e senha). O aplicativo **não tem cadastro público** e não cria contas.
-2. A pessoa entra no app com e-mail e senha. Sem equipe, o app oferece **"Criar sua equipe"** (função `create_team`): ela vira **coach**.
-3. Para adicionar mais gente: criar a conta no painel (passo 1) e, no app, em **Configurações → Conta e equipe → Adicionar pessoa à equipe** (só coach), informar o e-mail e o papel. Isso chama a função `add_team_member` do banco; o app **nunca** escreve direto em `team_members`.
-4. Cada pessoa pode trocar a senha por **"Esqueci minha senha"** (ver abaixo).
+Ninguém precisa abrir o painel do Supabase para entrar. O caminho é:
 
-Uma pessoa pode pertencer a várias equipes (o modelo permite): com mais de uma, o app mostra a escolha, e **"Trocar de equipe"** (barra lateral ou Configurações) limpa da memória os dados da anterior antes de abrir a outra.
+1. **A primeira pessoa** cria a conta no app (**Criar conta** na tela de entrada) e, sem equipe, usa **"Criar equipe"** (função `create_team`): vira **coach**.
+2. **O coach convida**: em **Configurações → Conta e equipe → Convidar pessoas**, escolhe o papel (comissão técnica, analista ou somente leitura), a validade (1 a 90 dias) e quantas pessoas podem usar (1 a 50), e cria o convite (função `create_team_invite`). O **código** (`A1B2-C3D4-E5F6`) e o **link** aparecem **uma única vez**: o banco guarda só o hash. O coach envia o código ou o link à pessoa.
+3. **A pessoa convidada** abre o link (ou o app), usa **Criar conta** e, na tela seguinte, digita o código (o link já o preenche): a função `redeem_team_invite` coloca a pessoa na equipe com o papel do convite. Quem não tem convite pode **criar a própria equipe** (decisão do dono, 2026-11-19).
+4. Convites ficam na lista da equipe (usos, validade, situação) e podem ser **revogados** (`revoke_team_invite`). Convite revogado, vencido, esgotado ou inexistente responde sempre "inválido", e cada pessoa tem 10 tentativas inválidas a cada 15 minutos.
+5. Para quem **já tem conta**, o coach ainda pode usar **Adicionar pessoa à equipe** (`add_team_member`, por e-mail). Quem já está em uma equipe entra em outra por **Configurações → Entrar em outra equipe**.
+6. Cada pessoa pode trocar a senha por **"Esqueci minha senha"** (ver abaixo). O app **nunca** escreve direto em `team_members` nem em `team_invites`.
+
+**Limites conhecidos:** quem criou uma equipe por engano continua nela (não existe "sair da equipe" nem remover membro pelo app); um convite de comissão técnica dá acesso total, por isso a tela avisa antes de criar; o código só é mostrado na criação (perdeu, crie outro e revogue o antigo).
+
+### Cadastro aberto: o que precisa ser feito no painel (manual, do dono do projeto)
+
+O app só consegue criar contas se o projeto permitir. **Antes de divulgar o link de convite:**
+
+1. **Authentication → Sign In / Providers → Email:** ligar **"Allow new users to sign up"** (antes ficava DESLIGADO de propósito).
+2. **Confirm email:** decisão do dono.
+   - **Ligado** (padrão do Supabase): a pessoa confirma o e-mail antes de entrar. O e-mail embutido do Supabase tem **limite muito baixo de envios por hora**, então com várias pessoas entrando em sequência convém configurar **SMTP próprio** (*Authentication → Emails → SMTP Settings*).
+   - **Desligado**: a pessoa entra na hora, sem e-mail. O código do convite continua sendo a barreira de entrada na equipe, mas o e-mail informado não é verificado (a recuperação de senha dependeria de um e-mail que pode não ser da pessoa).
+3. **Authentication → URL Configuration:** conferir *Site URL* e *Redirect URLs* (`https://alpha7-liart.vercel.app` e `https://alpha7-liart.vercel.app/**`): o link de confirmação de e-mail e o de convite usam essa origem.
+4. **Proteção contra abuso (recomendada):** com o cadastro aberto, qualquer pessoa pode criar contas e **equipes próprias** no projeto (os dados continuam isolados por equipe pela RLS, mas contas e equipes contam no plano). Considere **CAPTCHA** (*Authentication → Attack Protection*) e acompanhe *Authentication → Users*.
+
+5. **Authentication → Attack Protection → "Prevent use of leaked passwords"** (advisor de segurança: hoje desligado): recomendado ligar, ainda mais com o cadastro aberto.
+
+**Estado:** a migração foi aplicada em 2026-11-19 e provada no banco real; a mudança do painel é do dono e **não foi feita nem testada com e-mail real** até o momento desta escrita.
+
+**Advisors depois da migração (2026-11-19):** os avisos "SECURITY DEFINER executável por `authenticated`" das três funções novas são **intencionais** (como os das funções de partida: cada uma confere o papel por dentro e o `anon` não executa); de desempenho, apenas informativos (`private.invite_attempts` sem chave primária, por ser só um registro de tentativas, e índices novos ainda sem uso).
 
 ### Recuperação de senha: o que precisa ser feito no painel
 
@@ -98,7 +119,7 @@ Comportamento:
 6. A regra "ninguém aparece duas vezes na escalação" (titulares + líbero + reservas) vale no domínio; no banco só dentro de titulares e dentro de reservas.
 7. "Não remover da lista de participantes quem tem registro válido" é conferida pelo gateway antes de gravar (condição de corrida possível entre duas pessoas); no banco só a inserção de registro exige participação.
 8. A mensagem de erro da função `add_team_member` no banco diz "ainda não entrou no Alpha7"; o app a substitui por um texto correto (a conta precisa existir). Corrigir a mensagem exigiria nova migração.
-9. Sem cadastro público no app, mas **o painel pode estar com cadastro aberto**: desligar "Allow new users to sign up" depois de criar as contas da equipe.
+9. Com o cadastro aberto (0.10.0), qualquer pessoa pode criar conta e equipe própria: veja "Cadastro aberto: o que precisa ser feito no painel" (CAPTCHA, SMTP e confirmação de e-mail).
 
 ## Migrações (`supabase/migrations/`, em ordem)
 
@@ -110,6 +131,7 @@ Comportamento:
 | `20261013102000_missing_fk_indexes.sql` | Índices de chaves estrangeiras apontados pelo advisor |
 | `20261013134608_matches.sql` | **0.5.0, aditiva:** partidas, sets, titulares do set, pontos e ações técnicas; funções transacionais de placar (`start_set`, `record_rally`, `void_last_rally`, `cancel_empty_set`, `conclude_match`, `reopen_match`, `add_rally_action`, `void_rally_action`); RLS e privilégios mínimos (sem escrita direta em sets/pontos/ações) |
 | `20261013191918_player_photos.sql` | **0.6.0, aditiva:** `players.photo_path`, bucket privado `player-photos` (1 MB; JPEG/PNG/WebP) e políticas de Storage (membros leem; só coach escreve na pasta da equipe) |
+| `20261119120000_team_invites.sql` | **0.10.0, aditiva:** `team_invites` (só o hash do código; leitura só do coach, sem a coluna do hash), tentativas inválidas em `private.invite_attempts` e as funções `create_team_invite`, `redeem_team_invite` e `revoke_team_invite`. Prova: `supabase/tests/invites.test.sql` |
 | `20261013134700_matches_fk_indexes.sql` | Índices apontados pelo advisor de desempenho depois das partidas |
 
 Aplicadas no projeto com exatamente este SQL, nesta ordem; os nomes usam as versões registradas no banco (`supabase_migrations.schema_migrations`). Migração aplicada **não se edita**: corrija com uma nova. Depois de cada migração: rodar os testes SQL abaixo, os advisors de segurança/desempenho e regerar `database.types.ts`.

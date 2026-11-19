@@ -579,6 +579,56 @@ export type Database = {
           },
         ];
       };
+      team_invites: {
+        Row: {
+          code_hash: string;
+          created_at: string;
+          created_by: string | null;
+          expires_at: string;
+          id: string;
+          label: string | null;
+          max_uses: number;
+          revoked_at: string | null;
+          role: string;
+          team_id: string;
+          used_count: number;
+        };
+        Insert: {
+          code_hash: string;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at: string;
+          id?: string;
+          label?: string | null;
+          max_uses: number;
+          revoked_at?: string | null;
+          role: string;
+          team_id: string;
+          used_count?: number;
+        };
+        Update: {
+          code_hash?: string;
+          created_at?: string;
+          created_by?: string | null;
+          expires_at?: string;
+          id?: string;
+          label?: string | null;
+          max_uses?: number;
+          revoked_at?: string | null;
+          role?: string;
+          team_id?: string;
+          used_count?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: 'team_invites_team_id_fkey';
+            columns: ['team_id'];
+            isOneToOne: false;
+            referencedRelation: 'teams';
+            referencedColumns: ['id'];
+          },
+        ];
+      };
       team_members: {
         Row: { created_at: string; role: string; team_id: string; user_id: string };
         Insert: { created_at?: string; role: string; team_id: string; user_id: string };
@@ -789,7 +839,10 @@ export type Database = {
       cancel_empty_set: { Args: { p_match: string; p_number: number; p_team: string }; Returns: undefined };
       conclude_match: { Args: { p_match: string; p_team: string }; Returns: Json };
       create_team: { Args: { p_name: string }; Returns: string };
+      create_team_invite: { Args: { p_label: string; p_max_uses: number; p_role: string; p_team: string; p_valid_days: number }; Returns: Json };
+      redeem_team_invite: { Args: { p_code: string }; Returns: Json };
       record_rally: { Args: { p_match: string; p_rally: Json; p_team: string }; Returns: Json };
+      revoke_team_invite: { Args: { p_invite: string; p_team: string }; Returns: undefined };
       reopen_match: { Args: { p_match: string; p_team: string }; Returns: Json };
       start_set: { Args: { p_match: string; p_set: Json; p_team: string }; Returns: undefined };
       void_last_rally: { Args: { p_match: string; p_rally: string; p_team: string }; Returns: undefined };

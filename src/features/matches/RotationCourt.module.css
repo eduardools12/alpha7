@@ -73,3 +73,55 @@
   color: var(--text-faint);
   font-size: var(--fs-xs);
 }
+
+/* Modo interativo: a célula só posiciona; o botão ocupa a posição inteira (mínimo de 44 px de toque). */
+.cell {
+  display: flex;
+  min-width: 0;
+}
+
+.pick {
+  flex: 1;
+  min-height: 4.5rem;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.pick:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.pick:hover:not(:disabled) {
+  border-color: var(--a7-lilac-300);
+}
+
+.selected {
+  border-color: var(--a7-lilac-100);
+  background: var(--a7-purple-800, var(--surface-purple));
+  box-shadow: inset 0 0 0 2px var(--a7-lilac-100);
+}
+
+/* Celular: tiles baixos (P e nome), sem papel nem etiqueta de saque (a linha "Saca agora" e a cor já dizem), para a quadra
+   caber sem empurrar os botões de ponto para fora da tela. */
+@media (max-width: 40rem) {
+  .pick {
+    min-height: 2.75rem;
+    gap: 0;
+    padding: 2px var(--s-1);
+  }
+
+  .pick .name {
+    max-width: 100%;
+    overflow: hidden;
+    font-size: var(--fs-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pick .role,
+  .pick .tag {
+    display: none;
+  }
+}

@@ -28,12 +28,12 @@ function teamWithCoach() {
 }
 
 describe('Login por e-mail e senha', () => {
-  it('sem sessão mostra o login e nada do aplicativo; não existe cadastro público', async () => {
+  it('sem sessão mostra o login e nada do aplicativo; criar conta não dá acesso a dados', async () => {
     renderRemote(teamWithCoach());
     await loginHeading();
     expect(screen.queryByRole('navigation', { name: 'Principal' })).not.toBeInTheDocument();
-    expect(screen.queryByText(/criar conta|cadastre-se|cadastrar-se/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/acesso é por convite/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Criar conta' })).toBeInTheDocument();
+    expect(screen.getByText(/código de convite da comissão técnica/i)).toBeInTheDocument();
   });
 
   it('valida os campos antes de enviar, com foco no primeiro erro e sem chamar o servidor', async () => {
@@ -264,7 +264,7 @@ describe('Equipe', () => {
     const fake = newFake();
     fake.signInAs(USERS.outsider.id);
     const { user } = renderRemote(fake);
-    expect(await screen.findByRole('heading', { level: 2, name: 'Criar sua equipe' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Entrar numa equipe' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Principal' })).not.toBeInTheDocument();
 
     await user.type(screen.getByLabelText('Nome da equipe'), 'Alpha7 Vôlei');
@@ -280,7 +280,7 @@ describe('Equipe', () => {
     const fake = newFake();
     fake.signInAs(USERS.outsider.id);
     const { user } = renderRemote(fake);
-    await screen.findByRole('heading', { level: 2, name: 'Criar sua equipe' });
+    await screen.findByRole('heading', { level: 2, name: 'Entrar numa equipe' });
     await user.click(screen.getByRole('button', { name: 'Criar equipe' }));
     expect(await screen.findByText(/Use de 2 a 80 caracteres/)).toBeInTheDocument();
     expect(fake.rpcCalls).toHaveLength(0);
@@ -365,7 +365,7 @@ describe('Equipe', () => {
     fake.seed('team_members', [{ team_id: TEAM_A, user_id: USERS.coach.id, role: 'admin', created_at: '2026-01-01T00:00:00.000Z' }]);
     fake.signInAs(USERS.coach.id);
     renderRemote(fake);
-    expect(await screen.findByRole('heading', { level: 2, name: 'Criar sua equipe' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Entrar numa equipe' })).toBeInTheDocument();
   });
 
   it('a pessoa não vê equipes das quais não participa', async () => {

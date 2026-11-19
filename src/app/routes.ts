@@ -21,6 +21,7 @@ export const PATHS = {
   match: (id: string) => `/partidas/${id}`,
   editMatch: (id: string) => `/partidas/${id}/editar`,
   liveMatch: (id: string) => `/partidas/${id}/acompanhar`,
+  reviewMatch: (id: string) => `/partidas/${id}/revisao`,
   stats: '/estatisticas',
   arts: '/artes',
   settings: '/configuracoes',

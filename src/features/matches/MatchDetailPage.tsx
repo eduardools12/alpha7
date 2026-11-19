@@ -82,6 +82,7 @@ export function MatchDetailPage() {
               </ButtonLink>
             )}
             <Can to="matches:write">
+              <ButtonLink to={PATHS.reviewMatch(match.id)}>Revisar com vídeo</ButtonLink>
               <ButtonLink to={PATHS.editMatch(match.id)} icon="edit">
                 Editar dados
               </ButtonLink>

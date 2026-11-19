@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { shortName, type Player } from '@/domain/player';
 import { courtPositions, setterPosition, type MatchSet, type Side } from '@/domain/match';
 import { POSITION_LABEL } from '@/domain/positions';
@@ -14,10 +15,15 @@ interface Props {
   rotation: number;
   servingSide: Side;
   playersById: ReadonlyMap<string, Player>;
+  /** Atleta marcado (só no modo interativo). */
+  selectedId?: string | null;
+  /** Quando informado, cada posição vira um botão que escolhe o atleta; sem ele a quadra é só leitura. */
+  onSelect?: (playerId: string) => void;
 }
 
 /** Formação em quadra na rotação atual. Mostra quem saca (P1) e onde está o levantador; não simula substituições. */
-export function RotationCourt({ set, rotation, servingSide, playersById }: Props) {
+export function RotationCourt({ set, rotation, servingSide, playersById, selectedId = null, onSelect }: Props) {
+  const idBase = useId();
   const positions = courtPositions(set, rotation); // índice 0 = P1
   const setter = setterPosition(set, rotation);
   const libero = set.liberoId ? playersById.get(set.liberoId) : undefined;
@@ -29,12 +35,43 @@ export function RotationCourt({ set, rotation, servingSide, playersById }: Props
           const entry = positions[position - 1];
           const player = entry ? playersById.get(entry.playerId) : undefined;
           const serving = position === 1 && servingSide === 'us';
-          return (
-            <li key={position} className={`${styles.spot} ${serving ? styles.serving : ''}`}>
+          const name = player ? `${shortName(player.name)} #${player.jerseyNumber}` : '—';
+          const role = entry ? POSITION_LABEL[entry.role] : '';
+          const content = (
+            <>
               <span className={styles.pos}>P{position}</span>
-              <strong className={styles.name}>{player ? `${shortName(player.name)} #${player.jerseyNumber}` : '—'}</strong>
-              <small className={styles.role}>{entry ? POSITION_LABEL[entry.role] : ''}</small>
+              <strong className={styles.name}>{name}</strong>
+              <small className={styles.role}>{role}</small>
               {serving && <span className={styles.tag}>Saque</span>}
+            </>
+          );
+          const spotClass = `${styles.spot} ${serving ? styles.serving : ''}`;
+          if (!onSelect) {
+            return (
+              <li key={position} className={spotClass}>
+                {content}
+              </li>
+            );
+          }
+          const describedBy = `${idBase}-p${position}`;
+          const selected = player !== undefined && selectedId === player.id;
+          return (
+            <li key={position} className={styles.cell}>
+              <button
+                type="button"
+                className={`${spotClass} ${styles.pick} ${selected ? styles.selected : ''}`}
+                aria-label={name}
+                aria-pressed={selected}
+                aria-describedby={describedBy}
+                disabled={player === undefined}
+                onClick={() => player && onSelect(player.id)}
+              >
+                {content}
+              </button>
+              <span id={describedBy} className="sr-only">
+                posição P{position}
+                {role ? `, ${role}` : ''}
+              </span>
             </li>
           );
         })}

@@ -157,6 +157,7 @@
 
 .chips > * {
   flex: none;
+  min-height: 2.75rem; /* alvo de toque de 44px também no botão do líbero */
 }
 
 @media (min-width: 48rem) {
@@ -325,4 +326,26 @@
   text-align: center;
   color: var(--a7-lilac-100);
   font-size: var(--fs-sm);
+}
+
+/* Barra de confirmação do sacador (ace e erro de saque do Alpha7): aparece sob a escolha do atleta, sem animação. */
+.suggest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s-3);
+  padding: var(--s-4);
+  border: 1px solid var(--line-accent);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+
+.suggestText {
+  margin: 0;
+  font-size: var(--fs-md);
+}
+
+.suggestActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
 }

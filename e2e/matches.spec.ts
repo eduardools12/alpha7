@@ -44,6 +44,9 @@ test.describe('partida completa no desktop', () => {
     await expect(page.getByText(/Saca agora:/)).toBeVisible();
 
     await page.getByRole('region', { name: 'Ponto do Alpha7' }).getByRole('button', { name: 'Ace' }).click();
+    // O sacador é sugerido: o ponto só é gravado depois da confirmação.
+    await expect(page.getByLabel('Alpha7: 0 pontos')).toBeVisible();
+    await page.getByRole('button', { name: /^Confirmar / }).click();
     await expect(page.getByLabel('Alpha7: 1 pontos')).toBeVisible();
     await page.getByRole('button', { name: 'Ponto do adversário' }).click();
     await expect(page.getByLabel('Time E2E: 1 pontos')).toBeVisible();
@@ -104,6 +107,24 @@ for (const viewport of [
         const box = await page.getByRole('region', { name: 'Ponto do Alpha7' }).getByRole('button', { name: reason }).boundingBox();
         expect(box?.height ?? 0, `${reason}: altura do alvo de toque`).toBeGreaterThanOrEqual(44);
       }
+      // Quadra clicável (atleta envolvido): cada posição e o líbero são alvos de toque de pelo menos 44px, sem estourar a largura.
+      const choices = page.getByRole('group', { name: /Atleta envolvido no próximo ponto/ }).getByRole('button');
+      expect(await choices.count()).toBeGreaterThanOrEqual(6);
+      for (const box of await choices.evaluateAll((nodes) => nodes.map((n) => n.getBoundingClientRect().toJSON()))) {
+        expect(box.height, 'altura de um atleta na quadra').toBeGreaterThanOrEqual(44);
+        expect(box.width, 'largura de um atleta na quadra').toBeGreaterThanOrEqual(44);
+        expect(box.right, 'atleta na quadra dentro da tela').toBeLessThanOrEqual(viewport.width);
+      }
+      // Barra de confirmação do sacador aberta: sem rolagem horizontal, alvos de 44px e acessível.
+      await page.getByRole('region', { name: 'Ponto do Alpha7' }).getByRole('button', { name: 'Ace' }).click();
+      await expect(page.getByRole('group', { name: 'Confirmar o atleta do ponto' })).toBeVisible();
+      await noHorizontalScroll(page, 'barra de confirmação do sacador');
+      for (const name of [/^Confirmar /, 'Escolher outro atleta', 'Sem atleta']) {
+        const box = await page.getByRole('group', { name: 'Confirmar o atleta do ponto' }).getByRole('button', { name }).boundingBox();
+        expect(box?.height ?? 0, `${String(name)}: altura do alvo de toque`).toBeGreaterThanOrEqual(44);
+      }
+      await audit(page, `confirmação do sacador (${viewport.width}px)`);
+      await page.getByRole('button', { name: 'Escolher outro atleta' }).click();
       await page.getByRole('button', { name: 'Ponto do Alpha7' }).click();
       await expect(page.getByLabel('Alpha7: 1 pontos')).toBeVisible();
       await audit(page, `acompanhamento (${viewport.width}px)`);

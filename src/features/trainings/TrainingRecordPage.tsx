@@ -26,6 +26,7 @@ import { lastValidEvent, recentValidEvents, validEvents, type TrainingEvent } fr
 import { formatClock, playerLabel } from './trainingFormat';
 import styles from './TrainingRecordPage.module.css';
 import { useWakeLock } from '@/pwa/hooks';
+import { afterRegistration, clampSeries, interpretShortcut, stepParticipantId } from '@/domain/trainingRotation';
 
 /** Impede toques repetidos acidentais: depois de registrar, os botões ficam bloqueados por um instante. */
 const LOCK_MS = 350;
@@ -60,11 +61,23 @@ export function TrainingRecordPage() {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [fundamental, setFundamental] = useState<Fundamental>('saque');
   const [locked, setLocked] = useState(false);
+  // Rodízio de atletas: opcional e só desta tela (nada é gravado). `rotationRaw` é o texto digitado; o valor usado sempre passa por `clampSeries`.
+  const [rotationOn, setRotationOn] = useState(false);
+  const [rotationRaw, setRotationRaw] = useState('1');
+  const doneInSeries = useRef(0);
+  // Os atalhos de teclado usam sempre a versão mais recente do tratador (definido depois dos retornos antecipados).
+  const shortcutHandler = useRef<((event: KeyboardEvent) => void) | null>(null);
   const offline = useCloudOffline();
   const [pressed, setPressed] = useState<string | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
   const timers = useRef<number[]>([]);
   const toastTimer = useRef<number | null>(null);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => shortcutHandler.current?.(event);
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
 
   useEffect(() => {
     const pending = timers.current;
@@ -208,6 +221,9 @@ export function TrainingRecordPage() {
         attemptKey: newId('attempt'), // uma chave por toque: repetir o MESMO envio nunca duplica
       });
       showToast({ kind: 'registered', text: `Registrado: ${describe(event)}` });
+      const turn = afterRegistration({ enabled: rotationOn, every: Number(rotationRaw) }, doneInSeries.current);
+      doneInSeries.current = turn.doneInSeries;
+      if (turn.advance) setPlayerId(stepParticipantId(participants.map((p) => p.id), currentPlayer.id, 1));
       setPressed(outcome);
       later(() => setPressed(null), 700);
       navigator.vibrate?.(12);
@@ -229,6 +245,23 @@ export function TrainingRecordPage() {
     } catch (error) {
       showToast({ kind: 'error', text: error instanceof Error ? error.message : 'Não foi possível desfazer.' });
     }
+  };
+
+  const participantIds = participants.map((p) => p.id);
+  shortcutHandler.current = (event: KeyboardEvent) => {
+    if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented) return;
+    const target = event.target;
+    if (target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName))) return; // digitando
+    const shortcut = interpretShortcut(event.key, outcomes.length);
+    if (!shortcut) return;
+    event.preventDefault();
+    if (shortcut.kind === 'player') {
+      setPlayerId(stepParticipantId(participantIds, currentPlayer?.id ?? null, shortcut.step));
+      doneInSeries.current = 0;
+      return;
+    }
+    const outcome = outcomes[shortcut.index];
+    if (outcome !== undefined && currentPlayer) void record(outcome);
   };
 
   return (
@@ -286,7 +319,10 @@ export function TrainingRecordPage() {
                     className={styles.player}
                     aria-pressed={currentPlayer?.id === player.id}
                     aria-label={`${shortName(player.name)}, camisa ${player.jerseyNumber}, ${total} ${total === 1 ? 'registro' : 'registros'} neste treino`}
-                    onClick={() => setPlayerId(player.id)}
+                    onClick={() => {
+                      setPlayerId(player.id);
+                      doneInSeries.current = 0;
+                    }}
                   >
                     <span className={styles.avatar}>
                       <PlayerPhoto player={player} fallback={<Jersey color={player.uniform} number={player.jerseyNumber} />} />
@@ -299,6 +335,41 @@ export function TrainingRecordPage() {
                 );
               })}
             </div>
+          </section>
+
+          <section aria-labelledby="sec-rodizio" className={styles.section}>
+            <h2 id="sec-rodizio" className={styles.label}>
+              Rodízio de atletas
+            </h2>
+            <div className={styles.rotation}>
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  checked={rotationOn}
+                  onChange={(event) => {
+                    setRotationOn(event.target.checked);
+                    doneInSeries.current = 0;
+                  }}
+                />
+                Passar para o próximo atleta
+              </label>
+              <label className={styles.every}>
+                Tentativas por atleta antes de trocar
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={20}
+                  value={rotationRaw}
+                  disabled={!rotationOn}
+                  onChange={(event) => setRotationRaw(event.target.value)}
+                  onBlur={() => setRotationRaw(String(clampSeries(Number(rotationRaw))))}
+                />
+              </label>
+            </div>
+            <p className={styles.hint}>
+              Atalhos de teclado: 1 a {outcomes.length} escolhem o resultado; as setas trocam de atleta.
+            </p>
           </section>
 
           <section aria-labelledby="sec-fundamento" className={styles.section}>

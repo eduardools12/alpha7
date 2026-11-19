@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { AlphaSupabaseClient } from '@/data/supabase/client';
+import { capturePendingInvite, clearPendingInvite } from './pendingInvite';
 
 /** O que o provedor usa do cliente: só autenticação. Os dados da equipe são assunto do SupabaseGateway. */
 export type AuthClient = Pick<AlphaSupabaseClient, 'auth'>;
@@ -19,12 +20,21 @@ export interface AuthUser {
 
 export type AuthResult = { ok: true } | { ok: false; message: string };
 
+/** Criar conta: com a confirmação de e-mail ligada no projeto, a pessoa só entra depois de abrir o link recebido. */
+export type SignUpResult = { ok: true; confirmationRequired: boolean } | { ok: false; message: string };
+
 export interface AuthValue {
   status: AuthStatus;
   user: AuthUser | null;
   /** Por que voltou ao login sem a pessoa pedir: a sessão expirou ou foi encerrada em outro lugar. */
   notice: 'expired' | null;
   signIn(email: string, password: string): Promise<AuthResult>;
+  /** Cria a própria conta (e-mail e senha). Entrar numa equipe é outro passo: convite com código ou criar a equipe. */
+  signUp(email: string, password: string): Promise<SignUpResult>;
+  /** Convite recebido por link e ainda não usado (código no formato A1B2-C3D4-E5F6). */
+  pendingInvite: string | null;
+  /** Esquece o convite pendente (usado, recusado ou dispensado pela pessoa). */
+  dismissPendingInvite(): void;
   signOut(): Promise<void>;
   /** Pede o e-mail de redefinição. Sempre responde igual, exista a conta ou não (não revela quem tem acesso). */
   requestPasswordReset(email: string): Promise<AuthResult>;
@@ -53,7 +63,9 @@ export function describeAuthError(error: AuthErrorLike, fallback: string): strin
     return 'Muitas tentativas em pouco tempo. Aguarde alguns minutos e tente de novo.';
   }
   if (code === 'invalid_credentials' || /invalid login credentials/.test(message)) return 'E-mail ou senha incorretos.';
-  if (code === 'email_not_confirmed' || /email not confirmed/.test(message)) return 'Este e-mail ainda não foi confirmado. Use o convite recebido.';
+  if (code === 'email_not_confirmed' || /email not confirmed/.test(message)) return 'Este e-mail ainda não foi confirmado. Abra o link que enviamos para você e entre de novo.';
+  if (code === 'user_already_exists' || /already registered/.test(message)) return 'Já existe uma conta com este e-mail. Entre com ela ou use "Esqueci minha senha".';
+  if (code === 'signup_disabled' || /signups? not allowed|signup is disabled/.test(message)) return 'O cadastro de novas contas está desligado neste projeto. Peça à comissão técnica para liberar.';
   if (code === 'weak_password' || /password should be|weak password/.test(message)) {
     return `A senha não atende aos requisitos de segurança (use pelo menos ${MIN_PASSWORD_LENGTH} caracteres).`;
   }
@@ -71,6 +83,7 @@ export function AuthProvider({ client, children }: { client: AuthClient; childre
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [user, setUser] = useState<AuthUser | null>(null);
   const [notice, setNotice] = useState<'expired' | null>(null);
+  const [pendingInvite, setPendingInvite] = useState<string | null>(() => capturePendingInvite());
   // O estado mais recente, para decidir dentro do evento se um "SIGNED_OUT" foi pedido pela pessoa.
   const statusRef = useRef<AuthStatus>('loading');
   const signingOut = useRef(false);
@@ -134,6 +147,25 @@ export function AuthProvider({ client, children }: { client: AuthClient; childre
     [client],
   );
 
+  const signUp = useCallback<AuthValue['signUp']>(
+    async (email, password) => {
+      const fallback = 'Não foi possível criar a conta. Tente de novo.';
+      try {
+        const { data, error } = await client.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${window.location.origin}/` } });
+        if (error) return { ok: false, message: describeAuthError(error, fallback) };
+        return { ok: true, confirmationRequired: data.session === null };
+      } catch (error) {
+        return { ok: false, message: describeAuthError(error instanceof Error ? error : {}, fallback) };
+      }
+    },
+    [client],
+  );
+
+  const dismissPendingInvite = useCallback(() => {
+    clearPendingInvite();
+    setPendingInvite(null);
+  }, []);
+
   const signOut = useCallback<AuthValue['signOut']>(async () => {
     signingOut.current = true;
     try {
@@ -179,8 +211,8 @@ export function AuthProvider({ client, children }: { client: AuthClient; childre
   );
 
   const value = useMemo<AuthValue>(
-    () => ({ status, user, notice, signIn, signOut, requestPasswordReset, updatePassword }),
-    [status, user, notice, signIn, signOut, requestPasswordReset, updatePassword],
+    () => ({ status, user, notice, signIn, signUp, pendingInvite, dismissPendingInvite, signOut, requestPasswordReset, updatePassword }),
+    [status, user, notice, signIn, signUp, pendingInvite, dismissPendingInvite, signOut, requestPasswordReset, updatePassword],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

@@ -13,6 +13,7 @@ const LineupListPage = lazyPage(() => import('@/features/lineup/LineupListPage')
 const MatchDetailPage = lazyPage(() => import('@/features/matches/MatchDetailPage'), 'MatchDetailPage');
 const MatchFormPage = lazyPage(() => import('@/features/matches/MatchFormPage'), 'MatchFormPage');
 const MatchLivePage = lazyPage(() => import('@/features/matches/MatchLivePage'), 'MatchLivePage');
+const MatchReviewPage = lazyPage(() => import('@/features/matches/review/MatchReviewPage'), 'MatchReviewPage');
 const MatchesListPage = lazyPage(() => import('@/features/matches/MatchesListPage'), 'MatchesListPage');
 const EvaluationPage = lazyPage(() => import('@/features/roster/EvaluationPage'), 'EvaluationPage');
 const PlayerFormPage = lazyPage(() => import('@/features/roster/PlayerFormPage'), 'PlayerFormPage');
@@ -54,6 +55,7 @@ export function AppRoutes() {
           <Route path="partidas/nova" element={<RequireCapability capability="matches:write"><MatchFormPage /></RequireCapability>} />
           <Route path="partidas/:matchId" element={<MatchDetailPage />} />
           <Route path="partidas/:matchId/editar" element={<RequireCapability capability="matches:write"><MatchFormPage /></RequireCapability>} />
+          <Route path="partidas/:matchId/revisao" element={<RequireCapability capability="matches:write"><MatchReviewPage /></RequireCapability>} />
           <Route path="partidas/:matchId/acompanhar" element={<RequireCapability capability="matches:write"><MatchLivePage /></RequireCapability>} />
           <Route path="estatisticas" element={<StatsPage />} />
           <Route path="artes" element={<RequireCapability capability="arts:generate"><ArtsPage /></RequireCapability>} />

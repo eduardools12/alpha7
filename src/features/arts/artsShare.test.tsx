@@ -7,8 +7,8 @@ import { makeMatch, makePlayer } from '@/test/factories';
 import { renderApp } from '@/test/renderApp';
 
 // O jsdom não desenha canvas: a conversão do SVG em PNG é trocada por um arquivo qualquer. O resto da tela é o real.
-vi.mock('./artSvg', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./artSvg')>()),
+vi.mock('./exportPng', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./exportPng')>()),
   svgToPng: vi.fn(() => Promise.resolve(new Blob(['png'], { type: 'image/png' }))),
 }));
 
@@ -64,7 +64,7 @@ describe('Gerador de artes: compartilhar', () => {
     await user.click(await screen.findByRole('button', { name: 'Compartilhar' }));
     await screen.findByText('Arte compartilhada.');
     const data = share.mock.calls[0]?.[0] as ShareData;
-    expect(data.title).toBe('Alpha7 x Rivais');
+    expect(data.title).toBe('Alpha7: escalação contra Rivais');
     expect(data.files?.[0]?.name).toMatch(/\.png$/);
     expect(screen.getByRole('button', { name: 'Baixar PNG' })).toBeInTheDocument(); // o download continua à mão
   });

@@ -41,7 +41,7 @@ export const CAPABILITY_LABEL: Record<Capability, string> = {
   'matches:write': 'criar ou editar partidas e registrar pontos',
   'matches:delete': 'excluir partidas',
   'matches:reopen': 'reabrir uma partida concluída',
-  'arts:generate': 'gerar artes da escalação',
+  'arts:generate': 'gerar artes',
 };
 
 const ALLOWED: Record<Capability, readonly Role[]> = {
